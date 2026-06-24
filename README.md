@@ -40,3 +40,12 @@ python3 -m http.server 4173
 - Squad-league data is a snapshot of the 1 June 2026 squad lists; re-parse Wikipedia to refresh.
 
 CRS: EPSG:3857 (tiles) / EPSG:4326 (data).
+
+## Disclaimer
+
+This is an **unofficial, non-commercial fan project**. It is **not affiliated with, endorsed by, or sponsored by FIFA**. "FIFA" and "FIFA World Cup" are trademarks of FIFA and are used here for identification purposes only. All match data is consumed from third-party sources (see above); country flags and boundaries are public-domain/free assets.
+
+## Licence
+
+Code is released under the [MIT License](LICENSE) © 2026 PoNienC. Third-party data and assets remain under their own licences (Natural Earth — public domain; OpenStreetMap — ODbL; Leaflet — BSD-2-Clause; worldcup26.ir — ISC).
+

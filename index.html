@@ -4,6 +4,13 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>FIFA World Cup 2026 — Qualified Nations Dashboard</title>
+<meta name="description" content="An unofficial interactive map dashboard of all 48 FIFA World Cup 2026 nations — live standings, a knockout bracket, squad-league charts, population and fun facts. GIS × football." />
+<meta property="og:title" content="FIFA World Cup 2026 — Qualified Nations Map Dashboard" />
+<meta property="og:description" content="All 48 nations on an interactive world map: live standings, a knockout bracket over a greyed globe, squad-league charts and fun facts." />
+<meta property="og:type" content="website" />
+<meta property="og:url" content="https://ponienc.github.io/wc2026_dashboard/" />
+<meta name="twitter:card" content="summary" />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='4' fill='%2316a34a'/%3E%3Ccircle cx='8' cy='8' r='3.4' fill='white'/%3E%3C/svg%3E" />
 
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
       integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
@@ -125,6 +132,10 @@
   .empty{font-size:12px;color:var(--muted);background:#f9fafb;border:1px dashed var(--line);border-radius:8px;
          padding:12px;line-height:1.5;margin-bottom:16px;}
 
+  .funfact{display:none;font-size:12px;line-height:1.5;color:#3f3f46;background:#f6f3ff;border:1px solid #e7e0fb;
+           border-left:3px solid #7c3aed;border-radius:8px;padding:8px 10px 8px 12px;margin:-2px 0 14px;}
+  .funfact::before{content:"⚽ ";}
+
   /* Bracket view */
   #bracket-view{display:none;position:absolute;inset:0;z-index:500;overflow:auto;background:transparent;padding:16px 20px 30px;}
   body.view-bracket #sidebar{display:none;}
@@ -171,7 +182,7 @@
 </head>
 <body>
   <header>
-    <div class="title">FIFA World Cup 2026™ <span>· Qualified Nations</span></div>
+    <div class="title">FIFA World Cup 2026 <span>· Qualified Nations</span></div>
     <div class="spacer"></div>
     <div class="seg" id="viewSeg" title="Switch view">
       <button data-view="map" class="on">Map</button>
@@ -218,6 +229,7 @@
         </div>
         <div class="d-body">
           <div class="d-stats" id="dStats"></div>
+          <div class="funfact" id="dFact"></div>
           <div class="d-sec">Where the 26-man squad plays <span class="tag">by club country</span></div>
           <div id="dChart"></div>
           <div class="d-sec" style="margin-top:6px">Group fixtures</div>
@@ -261,6 +273,58 @@
   // Map fill colour by geographic continent (from Natural Earth CONTINENT). ≤6 categories.
   const CONTINENT_COLOURS = { 'North America':'#db2777', 'South America':'#16a34a', 'Europe':'#2563eb',
                               'Africa':'#ea580c', 'Asia':'#7c3aed', 'Oceania':'#0891b2' };
+
+  // One fun fact per nation (keyed by FIFA code), shown in the detail panel on zoom-in.
+  const FUN_FACTS = {
+    MEX:"Hosting a record third World Cup (1970, 1986, 2026) — yet never past the quarter-finals.",
+    RSA:"First African nation to host the World Cup (2010) — and the only host ever knocked out in the group stage.",
+    KOR:"Co-hosts and semi-finalists in 2002 — the best run by any Asian team in World Cup history.",
+    CZE:"As Czechoslovakia, twice World Cup runners-up (1934 & 1962).",
+    CAN:"Co-hosts in 2026; at their only previous World Cup (1986) they lost all three games without scoring.",
+    BIH:"Their one and only World Cup was 2014 — the Edin Džeko golden generation.",
+    QAT:"Hosts in 2022 — the first host nation ever to lose its opening match and exit winless.",
+    SUI:"Hosted the famous high-scoring 1954 World Cup; regular last-16 visitors ever since.",
+    BRA:"Record five-time champions — and the only nation to appear at every World Cup.",
+    MAR:"2022 semi-finalists — the first African and first Arab team ever to reach a World Cup semi-final.",
+    HAI:"At their only World Cup (1974), Emmanuel Sanon ended Dino Zoff's record 1,142-minute clean-sheet streak.",
+    SCO:"Eight World Cups — the most appearances by any nation that has never escaped the group stage.",
+    USA:"Co-hosts in 2026; semi-finalists at the very first World Cup back in 1930.",
+    PAR:"Reached the quarter-finals in 2010 — their deepest World Cup run.",
+    AUS:"The Socceroos switched from Oceania to Asia in 2006 to chase a steadier path to the World Cup.",
+    TUR:"Finished third in 2002 — and scored the fastest goal in World Cup history (11 seconds).",
+    GER:"Four-time champions, with a record number of World Cup final appearances.",
+    CUW:"Population around 150,000 — set to be one of the smallest nations ever to play at a World Cup.",
+    CIV:"Didier Drogba's golden generation reached three straight World Cups (2006–2014).",
+    ECU:"Famous for their altitude fortress in Quito, 2,850 m above sea level.",
+    JPN:"Beat both Germany and Spain in the 2022 group stage — and openly aim to win the World Cup by 2050.",
+    NED:"Three-time runners-up (1974, 1978, 2010) — the greatest team never to lift the trophy.",
+    SWE:"Runners-up as hosts in 1958, falling to Brazil and a 17-year-old Pelé.",
+    TUN:"The first African team ever to win a World Cup match (1978).",
+    BEL:"A 'golden generation' that finished third in 2018 — still hunting a first title.",
+    EGY:"The very first African nation to appear at a World Cup (1934).",
+    IRN:"Among Asia's most frequent qualifiers — and famous for beating the USA in 1998.",
+    NZL:"The only unbeaten team at the 2010 World Cup — three draws, then home.",
+    ESP:"2010 world champions — who won it scoring just eight goals, the fewest ever by a winner.",
+    CPV:"Islands of around 500,000 people — a fairy-tale debut for the 'Blue Sharks'.",
+    KSA:"Beat eventual champions Argentina in 2022 — one of the greatest upsets the World Cup has seen.",
+    URU:"Won the very first World Cup (1930) and again in 1950's famous 'Maracanazo'.",
+    FRA:"Two-time champions (1998, 2018) and back-to-back finalists in 2018 and 2022.",
+    SEN:"Beat holders France on their 2002 debut and stormed to the quarter-finals.",
+    IRQ:"2007 Asian champions; their lone World Cup appearance came in 1986.",
+    NOR:"Back at the World Cup for the first time since 1998 — Erling Haaland's stage at last.",
+    ARG:"Reigning champions (2022) and three-time winners — the land of Maradona and Messi.",
+    ALG:"Their 1982 win over West Germany was so shocking it changed the rules of the group stage.",
+    AUT:"Home of the 1930s 'Wunderteam'; third place at the high-scoring 1954 World Cup.",
+    JOR:"A maiden World Cup — fresh off reaching the 2023 Asian Cup final.",
+    POR:"Eusébio top-scored on the way to third place in 1966; now Ronaldo's record-breaking stage.",
+    COD:"As Zaire, the first sub-Saharan African team to play at a World Cup (1974).",
+    UZB:"A first-ever World Cup — pioneering debutants from Central Asia.",
+    COL:"Carlos Valderrama's flair in 1994 and James Rodríguez's Golden Boot in 2014.",
+    ENG:"1966 world champions on home soil — still their only title.",
+    CRO:"2018 finalists and 2022 bronze medallists — remarkable for a nation of under four million.",
+    GHA:"A Luis Suárez handball away from becoming Africa's first World Cup semi-finalists in 2010.",
+    PAN:"Their only previous World Cup (2018) sparked a national public holiday when they qualified.",
+  };
 
   // REAL squad-league distribution, parsed from Wikipedia "2026 FIFA World Cup squads"
   // (each player's club country, aggregated). Keyed by FIFA code. Row: {lg:league, c:flag iso2, n:count}.
@@ -503,6 +567,8 @@
       <span class="pill">D <b>${r.d}</b></span><span class="pill">L <b>${r.l}</b></span>
       <span class="pill">GF <b>${r.gf}</b></span><span class="pill">GA <b>${r.ga}</b></span>
       <span class="pill">GD <b>${sign(r.gd)}</b></span><span class="pill">Pts <b>${r.pts}</b></span>` : '';
+    const fact = FUN_FACTS[rec.fifa]; const factEl = document.getElementById('dFact');
+    if (fact) { factEl.style.display = 'block'; factEl.textContent = fact; } else { factEl.style.display = 'none'; }
 
     // bar chart
     const data = SQUAD_LEAGUES[rec.fifa];
@@ -567,7 +633,8 @@
     document.getElementById('mapNote').innerHTML =
       `48 teams · 12 groups · click a nation to zoom in<br>` +
       `Tiles © OpenStreetMap, © CARTO · Boundaries: Natural Earth 1:50m · Data: worldcup26.ir<br>` +
-      `CRS: EPSG:3857 (tiles) / EPSG:4326 (data) · ${new Date().toLocaleDateString('en-GB')}`;
+      `CRS: EPSG:3857 (tiles) / EPSG:4326 (data) · ${new Date().toLocaleDateString('en-GB')}<br>` +
+      `Unofficial fan project — not affiliated with or endorsed by FIFA.`;
   }
 
   // ===================================================================
