@@ -1,0 +1,691 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>FIFA World Cup 2026 — Qualified Nations Dashboard</title>
+
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+<style>
+  :root {
+    --bg:#f3f4f6; --panel:#fff; --ink:#1f2933; --muted:#6b7280; --line:#e5e7eb;
+    --selected:#f59e0b; --win:#22c55e; --draw:#9ca3af; --loss:#ef4444; --confirmed:#16a34a;
+    --shadow:0 1px 3px rgba(0,0,0,.08),0 1px 2px rgba(0,0,0,.04);
+  }
+  *{box-sizing:border-box;}
+  html,body{height:100%;margin:0;}
+  body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+       color:var(--ink);background:var(--bg);display:flex;flex-direction:column;overflow:hidden;}
+
+  /* Header */
+  header{flex:0 0 auto;display:flex;align-items:center;gap:14px;padding:10px 18px;background:var(--panel);
+         border-bottom:1px solid var(--line);box-shadow:var(--shadow);z-index:1100;}
+  header .title{font-size:17px;font-weight:700;letter-spacing:-.2px;white-space:nowrap;}
+  header .title span{color:var(--muted);font-weight:500;}
+  header .spacer{flex:1;}
+  .badge{display:inline-flex;align-items:center;gap:7px;font-size:12px;font-weight:600;color:var(--muted);
+         padding:5px 11px;border:1px solid var(--line);border-radius:999px;background:#fff;white-space:nowrap;}
+  .badge .dot{width:8px;height:8px;border-radius:50%;background:var(--muted);}
+  .badge.live .dot{background:var(--win);box-shadow:0 0 0 3px rgba(34,197,94,.18);}
+  .badge.mock .dot{background:var(--selected);}
+  .seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden;}
+  .seg button{font:inherit;font-size:12px;font-weight:600;border:0;background:#fff;color:var(--muted);
+              padding:6px 10px;cursor:pointer;}
+  .seg button.on{background:#eef2ff;color:#3730a3;}
+  button.btn{font:inherit;font-size:12px;font-weight:600;cursor:pointer;padding:6px 12px;border-radius:8px;
+             border:1px solid var(--line);background:#fff;color:var(--ink);}
+  button.btn:hover{background:#f9fafb;border-color:#d1d5db;}
+
+  main{flex:1 1 auto;display:flex;min-height:0;}
+
+  /* Sidebar */
+  #sidebar{flex:0 0 392px;max-width:392px;background:var(--bg);border-right:1px solid var(--line);
+           display:flex;flex-direction:column;min-height:0;}
+  .sidebar-tools{padding:12px 14px 8px;}
+  .search{width:100%;font:inherit;font-size:13px;padding:9px 12px;border-radius:9px;border:1px solid var(--line);
+          background:#fff;outline:none;}
+  .search:focus{border-color:#93c5fd;box-shadow:0 0 0 3px rgba(59,130,246,.12);}
+  .legend{display:flex;flex-wrap:wrap;gap:6px 14px;padding:6px 14px 10px;font-size:11px;color:var(--muted);}
+  .legend .item{display:inline-flex;align-items:center;gap:5px;}
+  .ldot{width:9px;height:9px;border-radius:50%;}
+  .swatch{width:11px;height:11px;border-radius:3px;}
+
+  #groups{flex:1 1 auto;overflow-y:auto;padding:4px 14px 18px;}
+  .group{background:var(--panel);border:1px solid var(--line);border-radius:12px;margin-bottom:12px;
+         box-shadow:var(--shadow);overflow:hidden;}
+  .group h2{margin:0;padding:10px 14px;font-size:13px;font-weight:700;display:flex;align-items:center;gap:8px;
+            border-bottom:1px solid var(--line);background:#fafafa;}
+  .group h2 .chip{width:12px;height:12px;border-radius:3px;flex:0 0 auto;}
+  .group h2 .gcount{margin-left:auto;font-size:11px;font-weight:500;color:var(--muted);}
+  .thead,.team{display:grid;grid-template-columns:18px 28px 1fr 24px 30px 28px auto;gap:6px;align-items:center;}
+  .thead{padding:6px 12px 6px 8px;font-size:10px;color:var(--muted);text-transform:uppercase;
+         letter-spacing:.04em;border-bottom:1px solid var(--line);}
+  .thead .c{text-align:center;} .thead .r{text-align:right;}
+  .team{padding:9px 12px 9px 8px;border-bottom:1px solid #f1f2f4;cursor:pointer;transition:background .12s;
+        border-left:3px solid transparent;}
+  .team:last-child{border-bottom:0;}
+  .team:hover{background:#f7faf8;}
+  .team:focus-visible{outline:2px solid #93c5fd;outline-offset:-2px;}
+  .team.active{background:#fff7ec;border-left-color:var(--selected);}
+  .team .pos{font-size:12px;color:var(--muted);text-align:center;}
+  .team .flag{width:26px;height:18px;border-radius:2px;object-fit:cover;box-shadow:0 0 0 1px rgba(0,0,0,.08);}
+  .team .name{font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .team .num{font-size:12px;text-align:right;color:#374151;font-variant-numeric:tabular-nums;}
+  .team .pts{font-weight:700;color:var(--ink);}
+  .team .form{display:inline-flex;gap:3px;justify-content:flex-end;}
+  .fdot{width:9px;height:9px;border-radius:50%;display:inline-block;}
+  .fdot.W{background:var(--win);} .fdot.D{background:var(--draw);} .fdot.L{background:var(--loss);}
+  .fdot.n{width:9px;height:9px;color:var(--muted);font-size:10px;line-height:9px;text-align:center;}
+
+  /* Map */
+  #map-wrap{flex:1 1 auto;position:relative;min-width:0;}
+  #map{position:absolute;inset:0;background:#aadaff;}
+  .map-note{position:absolute;bottom:10px;left:10px;z-index:600;background:rgba(255,255,255,.92);
+            border:1px solid var(--line);border-radius:8px;padding:7px 10px;font-size:11px;color:var(--muted);
+            box-shadow:var(--shadow);pointer-events:none;max-width:330px;line-height:1.5;}
+
+  /* Detail panel */
+  #detail{position:absolute;top:10px;right:10px;bottom:10px;width:336px;z-index:700;background:var(--panel);
+          border:1px solid var(--line);border-radius:12px;box-shadow:0 8px 28px rgba(0,0,0,.16);
+          display:flex;flex-direction:column;transform:translateX(380px);opacity:0;transition:transform .28s ease,opacity .28s ease;}
+  #detail.open{transform:translateX(0);opacity:1;}
+  .d-head{display:flex;align-items:center;gap:10px;padding:14px 14px 12px;border-bottom:1px solid var(--line);}
+  .d-head img{width:34px;height:24px;border-radius:3px;box-shadow:0 0 0 1px rgba(0,0,0,.1);}
+  .d-head .dn{font-size:16px;font-weight:700;line-height:1.15;}
+  .d-head .dg{font-size:12px;color:var(--muted);}
+  .d-head .x{margin-left:auto;border:0;background:#f3f4f6;border-radius:8px;width:28px;height:28px;cursor:pointer;
+             font-size:16px;color:var(--muted);line-height:1;}
+  .d-head .x:hover{background:#e5e7eb;}
+  .d-body{flex:1 1 auto;overflow-y:auto;padding:12px 14px 16px;}
+  .d-stats{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px;}
+  .pill{font-size:11px;color:#374151;background:#f3f4f6;border-radius:6px;padding:4px 8px;font-variant-numeric:tabular-nums;}
+  .pill b{color:var(--ink);}
+  .d-sec{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);
+         margin:6px 0 8px;display:flex;align-items:center;gap:8px;}
+  .tag{font-weight:600;text-transform:none;letter-spacing:0;font-size:10px;color:#475569;background:#eef2f6;
+       border-radius:6px;padding:2px 6px;}
+  .bars{display:flex;flex-direction:column;gap:7px;margin-bottom:16px;}
+  .bar-row{display:grid;grid-template-columns:104px 1fr 22px;gap:7px;align-items:center;font-size:12px;}
+  .bar-lab{display:flex;align-items:center;gap:5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .bar-lab img{width:16px;height:12px;border-radius:1px;box-shadow:0 0 0 1px rgba(0,0,0,.1);flex:0 0 auto;}
+  .bar-track{background:#f1f2f4;border-radius:5px;height:16px;overflow:hidden;}
+  .bar-fill{display:block;height:100%;border-radius:5px;min-width:3px;transition:width .5s ease;}
+  .bar-n{text-align:right;font-weight:600;color:#374151;font-variant-numeric:tabular-nums;}
+  .fixtures{display:flex;flex-direction:column;gap:6px;}
+  .fx{display:grid;grid-template-columns:30px 1fr auto;gap:8px;align-items:center;font-size:12px;
+      border:1px solid var(--line);border-radius:8px;padding:7px 9px;}
+  .fx .md{color:var(--muted);font-size:11px;}
+  .fx .opp{display:flex;align-items:center;gap:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .fx .opp img{width:18px;height:13px;border-radius:1px;box-shadow:0 0 0 1px rgba(0,0,0,.1);}
+  .fx .res{font-weight:700;font-variant-numeric:tabular-nums;}
+  .fx .res.W{color:var(--win);} .fx .res.L{color:var(--loss);} .fx .res.D{color:var(--draw);}
+  .fx .res.sched{font-weight:500;color:var(--muted);}
+  .d-foot{font-size:10px;color:var(--muted);padding:10px 14px;border-top:1px solid var(--line);line-height:1.5;}
+  .empty{font-size:12px;color:var(--muted);background:#f9fafb;border:1px dashed var(--line);border-radius:8px;
+         padding:12px;line-height:1.5;margin-bottom:16px;}
+
+  /* Bracket view */
+  #bracket-view{display:none;flex:1 1 auto;overflow:auto;background:var(--bg);padding:16px 20px 30px;}
+  body.view-bracket #sidebar, body.view-bracket #map-wrap{display:none;}
+  body.view-bracket #bracket-view{display:block;}
+  .bk-title{font-size:18px;font-weight:700;margin:0 0 14px;letter-spacing:-.2px;}
+  .bracket{display:flex;align-items:stretch;gap:12px;min-width:1180px;min-height:740px;position:relative;}
+  svg.bk-lines path{stroke:#d1d5db;}
+  .bk-half{display:flex;gap:12px;flex:1;}
+  .bk-half.right{flex-direction:row-reverse;}
+  .bk-col{display:flex;flex-direction:column;flex:1;min-width:120px;}
+  .bk-col .bk-h,.bk-center .bk-h{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);text-align:center;padding-bottom:8px;flex:0 0 auto;}
+  .bk-matches{flex:1;display:flex;flex-direction:column;justify-content:space-around;gap:8px;}
+  .bk-center{display:flex;flex-direction:column;justify-content:center;align-items:stretch;min-width:166px;}
+  .mbox{background:var(--panel);border:1px solid var(--line);border-radius:8px;box-shadow:var(--shadow);overflow:hidden;position:relative;z-index:1;}
+  .mdate{font-size:9px;color:var(--muted);padding:3px 8px;border-bottom:1px solid var(--line);background:#fafafa;}
+  .mteam{display:flex;align-items:center;gap:7px;padding:7px 9px;font-size:12px;}
+  .mteam+.mteam{border-top:1px solid #f1f2f4;}
+  .mteam.pick{cursor:pointer;}
+  .mteam.pick:hover{background:#eef5ff;}
+  .mteam img{width:21px;height:15px;border-radius:1px;box-shadow:0 0 0 1px rgba(0,0,0,.1);flex:0 0 auto;}
+  .mteam .mc{font-weight:600;}
+  .mteam.tbd .mlabel{color:#9aa3af;font-size:11px;}
+  .mteam .ms{margin-left:auto;font-variant-numeric:tabular-nums;font-weight:700;color:#374151;}
+  .mteam.win .mc,.mteam.win .ms{color:var(--confirmed);}
+  .bk-final-box .mbox{border-color:var(--selected);box-shadow:0 6px 18px rgba(245,158,11,.20);}
+  .bk-final-box .mdate{background:#fff7ec;color:#b45309;font-weight:700;}
+  .bk-third{margin-top:18px;}
+  .bk-third .lab{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);text-align:center;padding-bottom:6px;}
+
+  @media (max-width:640px){
+    main{flex-direction:column;}
+    #sidebar{flex:0 0 auto;max-width:none;width:100%;max-height:42%;border-right:0;border-bottom:1px solid var(--line);}
+    #detail{top:auto;left:10px;width:auto;max-height:60%;transform:translateY(420px);}
+    #detail.open{transform:translateY(0);}
+  }
+</style>
+</head>
+<body>
+  <header>
+    <div class="title">FIFA World Cup 2026™ <span>· Qualified Nations</span></div>
+    <div class="spacer"></div>
+    <div class="seg" id="viewSeg" title="Switch view">
+      <button data-view="map" class="on">Map</button>
+      <button data-view="bracket">Bracket</button>
+    </div>
+    <div class="seg" id="colourSeg" title="Map colour mode">
+      <button data-mode="continent" class="on">By continent</button>
+      <button data-mode="single">Qualified</button>
+    </div>
+    <div id="dataBadge" class="badge mock"><span class="dot"></span><span id="dataBadgeText">Loading…</span></div>
+    <button class="btn" id="resetBtn" title="Reset the map to the world view">Reset</button>
+    <button class="btn" id="refreshBtn" title="Reload live standings">Refresh</button>
+  </header>
+
+  <main>
+    <aside id="sidebar">
+      <div class="sidebar-tools">
+        <input id="search" class="search" type="search" placeholder="Search a nation or group…" aria-label="Search" />
+      </div>
+      <div class="legend">
+        <span class="item"><span class="swatch" style="background:#2563eb"></span>Europe</span>
+        <span class="item"><span class="swatch" style="background:#16a34a"></span>S. America</span>
+        <span class="item"><span class="swatch" style="background:#db2777"></span>N. America</span>
+        <span class="item"><span class="swatch" style="background:#ea580c"></span>Africa</span>
+        <span class="item"><span class="swatch" style="background:#7c3aed"></span>Asia</span>
+        <span class="item"><span class="swatch" style="background:#0891b2"></span>Oceania</span>
+        <span class="item"><span class="swatch" style="background:var(--selected)"></span>Selected</span>
+        <span class="item"><span class="ldot" style="background:var(--win)"></span>W</span>
+        <span class="item"><span class="ldot" style="background:var(--draw)"></span>D</span>
+        <span class="item"><span class="ldot" style="background:var(--loss)"></span>L</span>
+      </div>
+      <div id="groups" aria-label="Groups and standings"></div>
+    </aside>
+
+    <div id="map-wrap">
+      <div id="map"></div>
+      <div class="map-note" id="mapNote">Click a nation to zoom in · loading…</div>
+
+      <section id="detail" aria-label="Nation detail">
+        <div class="d-head">
+          <img id="dFlag" src="" alt="" />
+          <div><div class="dn" id="dName"></div><div class="dg" id="dGroup"></div></div>
+          <button class="x" id="dClose" title="Close" aria-label="Close">×</button>
+        </div>
+        <div class="d-body">
+          <div class="d-stats" id="dStats"></div>
+          <div class="d-sec">Where the 26-man squad plays <span class="tag">by club country</span></div>
+          <div id="dChart"></div>
+          <div class="d-sec" style="margin-top:6px">Group fixtures</div>
+          <div class="fixtures" id="dFixtures"></div>
+        </div>
+        <div class="d-foot" id="dFoot"></div>
+      </section>
+    </div>
+
+    <div id="bracket-view" aria-label="Knockout bracket"></div>
+  </main>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+          integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <script>
+  // ===================================================================
+  //  CONFIG
+  // ===================================================================
+  const CONFIG = {
+    // Live, CORS-open, no key required. Real draw + live standings + 104 fixtures.
+    api: 'https://worldcup26.ir/get',
+    // Static fallback (same project's repo data; real draw, standings may lag).
+    staticTeams:  'https://cdn.jsdelivr.net/gh/rezarahiminia/worldcup2026@main/football.teams.json',
+    staticGroups: 'https://cdn.jsdelivr.net/gh/rezarahiminia/worldcup2026@main/worldcup2026.groups.json',
+    // Boundaries: Natural Earth 1:50m (full coverage incl. Cape Verde, Curaçao). Match on ADM0_A3.
+    geojsonUrl:      'https://cdn.jsdelivr.net/gh/nvkelso/natural-earth-vector@master/geojson/ne_50m_admin_0_countries.geojson',
+    geojsonFallback: 'https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_50m_admin_0_countries.geojson',
+    style: {
+      base:     { color:'#cbd5e1', weight:0.5, fillColor:'#e5e7eb', fillOpacity:0.30 },
+      selected: { color:'#b45309', weight:1.8, fillColor:'#f59e0b', fillOpacity:0.85 },
+      single:   '#16a34a',
+    },
+  };
+
+  // FIFA 3-letter codes differ from ISO-3166 alpha-3 for several nations.
+  const FIFA2ISO3 = { RSA:'ZAF', SUI:'CHE', HAI:'HTI', SCO:'GBR', PAR:'PRY', GER:'DEU',
+                      NED:'NLD', KSA:'SAU', URU:'URY', ALG:'DZA', POR:'PRT', ENG:'GBR', CRO:'HRV' };
+  const toIso3 = (fifa) => FIFA2ISO3[fifa] || fifa;
+
+  // Map fill colour by geographic continent (from Natural Earth CONTINENT). ≤6 categories.
+  const CONTINENT_COLOURS = { 'North America':'#db2777', 'South America':'#16a34a', 'Europe':'#2563eb',
+                              'Africa':'#ea580c', 'Asia':'#7c3aed', 'Oceania':'#0891b2' };
+
+  // REAL squad-league distribution, parsed from Wikipedia "2026 FIFA World Cup squads"
+  // (each player's club country, aggregated). Keyed by FIFA code. Row: {lg:league, c:flag iso2, n:count}.
+  // Regenerate with the bundled parser if squads change. Source date: 2026-06.
+  const SQUAD_LEAGUES = {"CZE": [{"lg": "Czech Liga", "c": "cz", "n": 17}, {"lg": "Bundesliga", "c": "de", "n": 4}, {"lg": "Premier League", "c": "gb-eng", "n": 2}, {"lg": "Eredivisie", "c": "nl", "n": 1}, {"lg": "Ligue 1", "c": "fr", "n": 1}, {"lg": "Primeira Liga", "c": "pt", "n": 1}], "MEX": [{"lg": "Liga MX", "c": "mx", "n": 12}, {"lg": "Super League Greece", "c": "gr", "n": 2}, {"lg": "Russian PL", "c": "ru", "n": 2}, {"lg": "Serie A", "c": "it", "n": 2}, {"lg": "La Liga", "c": "es", "n": 2}, {"lg": "Süper Lig", "c": "tr", "n": 1}, {"lg": "Premier League", "c": "gb-eng", "n": 1}, {"lg": "Cypriot First", "c": "cy", "n": 1}, {"lg": "Saudi Pro League", "c": "sa", "n": 1}, {"lg": "Eredivisie", "c": "nl", "n": 1}, {"lg": "Belgian Pro", "c": "be", "n": 1}], "RSA": [{"lg": "PSL (South Africa)", "c": "za", "n": 19}, {"lg": "MLS", "c": "us", "n": 2}, {"lg": "Premier League", "c": "gb-eng", "n": 1}, {"lg": "Cypriot First", "c": "cy", "n": 1}, {"lg": "Primeira Liga", "c": "pt", "n": 1}, {"lg": "Eliteserien", "c": "no", "n": 1}, {"lg": "Bundesliga", "c": "de", "n": 1}], "KOR": [{"lg": "K League", "c": "kr", "n": 7}, {"lg": "Bundesliga", "c": "de", "n": 3}, {"lg": "Premier League", "c": "gb-eng", "n": 3}, {"lg": "J1 League", "c": "jp", "n": 2}, {"lg": "Danish Superliga", "c": "dk", "n": 2}, {"lg": "Eredivisie", "c": "nl", "n": 1}, {"lg": "MLS", "c": "us", "n": 1}, {"lg": "Austrian BL", "c": "at", "n": 1}, {"lg": "Chinese SL", "c": "cn", "n": 1}, {"lg": "Süper Lig", "c": "tr", "n": 1}, {"lg": "Ligue 1", "c": "fr", "n": 1}, {"lg": "Scottish Prem", "c": "gb-sct", "n": 1}, {"lg": "Serbian SuperLiga", "c": "rs", "n": 1}, {"lg": "Wales", "c": "gb-wls", "n": 1}], "BIH": [{"lg": "Bundesliga", "c": "de", "n": 6}, {"lg": "Serie A", "c": "it", "n": 3}, {"lg": "Czech Liga", "c": "cz", "n": 2}, {"lg": "Austrian BL", "c": "at", "n": 2}, {"lg": "HNL (Croatia)", "c": "hr", "n": 2}, {"lg": "Süper Lig", "c": "tr", "n": 1}, {"lg": "Danish Superliga", "c": "dk", "n": 1}, {"lg": "Primeira Liga", "c": "pt", "n": 1}, {"lg": "Swiss Super", "c": "ch", "n": 1}, {"lg": "Ekstraklasa", "c": "pl", "n": 1}, {"lg": "Bosnia Premier", "c": "ba", "n": 1}, {"lg": "Kazakhstan PL", "c": "kz", "n": 1}, {"lg": "Cypriot First", "c": "cy", "n": 1}, {"lg": "Premier League", "c": "gb-eng", "n": 1}, {"lg": "Eredivisie", "c": "nl", "n": 1}, {"lg": "Romania Liga I", "c": "ro", "n": 1}], "CAN": [{"lg": "MLS", "c": "us", "n": 7}, {"lg": "Premier League", "c": "gb-eng", "n": 5}, {"lg": "Belgian Pro", "c": "be", "n": 3}, {"lg": "Scottish Prem", "c": "gb-sct", "n": 2}, {"lg": "Serie A", "c": "it", "n": 2}, {"lg": "La Liga", "c": "es", "n": 2}, {"lg": "Canadian PL", "c": "ca", "n": 2}, {"lg": "Ligue 1", "c": "fr", "n": 1}, {"lg": "Bundesliga", "c": "de", "n": 1}, {"lg": "HNL (Croatia)", "c": "hr", "n": 1}], "QAT": [{"lg": "Qatar Stars", "c": "qa", "n": 25}, {"lg": "La Liga", "c": "es", "n": 1}], "SUI": [{"lg": "Bundesliga", "c": "de", "n": 9}, {"lg": "Serie A", "c": "it", "n": 4}, {"lg": "Premier League", "c": "gb-eng", "n": 4}, {"lg": "La Liga", "c": "es", "n": 4}, {"lg": "Ligue 1", "c": "fr", "n": 3}, {"lg": "Swiss Super", "c": "ch", "n": 2}], "BRA": [{"lg": "Premier League", "c": "gb-eng", "n": 8}, {"lg": "Brazil Série A", "c": "br", "n": 7}, {"lg": "Serie A", "c": "it", "n": 2}, {"lg": "Ligue 1", "c": "fr", "n": 2}, {"lg": "La Liga", "c": "es", "n": 2}, {"lg": "Russian PL", "c": "ru", "n": 2}, {"lg": "Saudi Pro League", "c": "sa", "n": 2}, {"lg": "Süper Lig", "c": "tr", "n": 1}], "HAI": [{"lg": "Ligue 1", "c": "fr", "n": 5}, {"lg": "MLS", "c": "us", "n": 5}, {"lg": "Swiss Super", "c": "ch", "n": 2}, {"lg": "Premier League", "c": "gb-eng", "n": 2}, {"lg": "Belgian Pro", "c": "be", "n": 2}, {"lg": "Ecuador Serie A", "c": "ec", "n": 1}, {"lg": "Canadian PL", "c": "ca", "n": 1}, {"lg": "Persian Gulf PL", "c": "ir", "n": 1}, {"lg": "Eredivisie", "c": "nl", "n": 1}, {"lg": "Hungary NB I", "c": "hu", "n": 1}, {"lg": "Primeira Liga", "c": "pt", "n": 1}, {"lg": "Süper Lig", "c": "tr", "n": 1}, {"lg": "Bundesliga", "c": "de", "n": 1}, {"lg": "Slovak SL", "c": "sk", "n": 1}, {"lg": "Haiti", "c": "ht", "n": 1}], "MAR": [{"lg": "Ligue 1", "c": "fr", "n": 5}, {"lg": "Premier League", "c": "gb-eng", "n": 4}, {"lg": "La Liga", "c": "es", "n": 3}, {"lg": "Saudi Pro League", "c": "sa", "n": 2}, {"lg": "Eredivisie", "c": "nl", "n": 2}, {"lg": "Botola", "c": "ma", "n": 2}, {"lg": "Belgian Pro", "c": "be", "n": 2}, {"lg": "Bundesliga", "c": "de", "n": 2}, {"lg": "UAE Pro League", "c": "ae", "n": 1}, {"lg": "Egyptian PL", "c": "eg", "n": 1}, {"lg": "Super League Greece", "c": "gr", "n": 1}, {"lg": "Serie A", "c": "it", "n": 1}], "SCO": [{"lg": "Premier League", "c": "gb-eng", "n": 12}, {"lg": "Scottish Prem", "c": "gb-sct", "n": 8}, {"lg": "Serie A", "c": "it", "n": 3}, {"lg": "Saudi Pro League", "c": "sa", "n": 1}, {"lg": "Wales", "c": "gb-wls", "n": 1}, {"lg": "HNL (Croatia)", "c": "hr", "n": 1}], "AUS": [{"lg": "A-League", "c": "au", "n": 5}, {"lg": "Premier League", "c": "gb-eng", "n": 3}, {"lg": "MLS", "c": "us", "n": 3}, {"lg": "La Liga", "c": "es", "n": 2}, {"lg": "Serie A", "c": "it", "n": 2}, {"lg": "Eredivisie", "c": "nl", "n": 2}, {"lg": "J1 League", "c": "jp", "n": 2}, {"lg": "Bundesliga", "c": "de", "n": 2}, {"lg": "Cypriot First", "c": "cy", "n": 1}, {"lg": "Austrian BL", "c": "at", "n": 1}, {"lg": "Danish Superliga", "c": "dk", "n": 1}, {"lg": "Scottish Prem", "c": "gb-sct", "n": 1}, {"lg": "Wales", "c": "gb-wls", "n": 1}], "PAR": [{"lg": "Brazil Série A", "c": "br", "n": 7}, {"lg": "Liga Argentina", "c": "ar", "n": 5}, {"lg": "Paraguay Primera", "c": "py", "n": 3}, {"lg": "Premier League", "c": "gb-eng", "n": 3}, {"lg": "MLS", "c": "us", "n": 3}, {"lg": "Russian PL", "c": "ru", "n": 1}, {"lg": "Serie A", "c": "it", "n": 1}, {"lg": "Canadian PL", "c": "ca", "n": 1}, {"lg": "UAE Pro League", "c": "ae", "n": 1}, {"lg": "Ligue 1", "c": "fr", "n": 1}], "TUR": [{"lg": "Süper Lig", "c": "tr", "n": 15}, {"lg": "Serie A", "c": "it", "n": 3}, {"lg": "Bundesliga", "c": "de", "n": 3}, {"lg": "Premier League", "c": "gb-eng", "n": 2}, {"lg": "Saudi Pro League", "c": "sa", "n": 1}, {"lg": "La Liga", "c": "es", "n": 1}, {"lg": "Primeira Liga", "c": "pt", "n": 1}], "USA": [{"lg": "MLS", "c": "us", "n": 7}, {"lg": "Premier League", "c": "gb-eng", "n": 5}, {"lg": "Bundesliga", "c": "de", "n": 3}, {"lg": "Ligue 1", "c": "fr", "n": 3}, {"lg": "Eredivisie", "c": "nl", "n": 2}, {"lg": "Serie A", "c": "it", "n": 2}, {"lg": "Scottish Prem", "c": "gb-sct", "n": 1}, {"lg": "Canadian PL", "c": "ca", "n": 1}, {"lg": "La Liga", "c": "es", "n": 1}, {"lg": "Liga MX", "c": "mx", "n": 1}], "CUW": [{"lg": "Eredivisie", "c": "nl", "n": 12}, {"lg": "Süper Lig", "c": "tr", "n": 3}, {"lg": "Premier League", "c": "gb-eng", "n": 3}, {"lg": "MLS", "c": "us", "n": 2}, {"lg": "Saudi Pro League", "c": "sa", "n": 1}, {"lg": "Swiss Super", "c": "ch", "n": 1}, {"lg": "Super League Greece", "c": "gr", "n": 1}, {"lg": "Israeli PL", "c": "il", "n": 1}, {"lg": "Belgian Pro", "c": "be", "n": 1}, {"lg": "Malaysia SL", "c": "my", "n": 1}], "ECU": [{"lg": "Brazil Série A", "c": "br", "n": 5}, {"lg": "Belgian Pro", "c": "be", "n": 4}, {"lg": "Liga Argentina", "c": "ar", "n": 3}, {"lg": "Premier League", "c": "gb-eng", "n": 3}, {"lg": "Liga MX", "c": "mx", "n": 3}, {"lg": "Ecuador Serie A", "c": "ec", "n": 2}, {"lg": "Serie A", "c": "it", "n": 2}, {"lg": "Ligue 1", "c": "fr", "n": 1}, {"lg": "Super League Greece", "c": "gr", "n": 1}, {"lg": "Danish Superliga", "c": "dk", "n": 1}, {"lg": "Bundesliga", "c": "de", "n": 1}], "GER": [{"lg": "Bundesliga", "c": "de", "n": 19}, {"lg": "Premier League", "c": "gb-eng", "n": 5}, {"lg": "La Liga", "c": "es", "n": 1}, {"lg": "Süper Lig", "c": "tr", "n": 1}], "CIV": [{"lg": "Süper Lig", "c": "tr", "n": 5}, {"lg": "Primeira Liga", "c": "pt", "n": 3}, {"lg": "Serie A", "c": "it", "n": 3}, {"lg": "Ligue 1", "c": "fr", "n": 3}, {"lg": "Belgian Pro", "c": "be", "n": 3}, {"lg": "Premier League", "c": "gb-eng", "n": 3}, {"lg": "Bundesliga", "c": "de", "n": 2}, {"lg": "Slovenian PL", "c": "si", "n": 1}, {"lg": "Saudi Pro League", "c": "sa", "n": 1}, {"lg": "La Liga", "c": "es", "n": 1}, {"lg": "Super League Greece", "c": "gr", "n": 1}], "JPN": [{"lg": "Bundesliga", "c": "de", "n": 7}, {"lg": "Eredivisie", "c": "nl", "n": 5}, {"lg": "Belgian Pro", "c": "be", "n": 3}, {"lg": "J1 League", "c": "jp", "n": 3}, {"lg": "Premier League", "c": "gb-eng", "n": 2}, {"lg": "Ligue 1", "c": "fr", "n": 2}, {"lg": "Serie A", "c": "it", "n": 1}, {"lg": "La Liga", "c": "es", "n": 1}, {"lg": "Scottish Prem", "c": "gb-sct", "n": 1}, {"lg": "Danish Superliga", "c": "dk", "n": 1}], "NED": [{"lg": "Premier League", "c": "gb-eng", "n": 15}, {"lg": "Serie A", "c": "it", "n": 4}, {"lg": "Eredivisie", "c": "nl", "n": 2}, {"lg": "Brazil Série A", "c": "br", "n": 1}, {"lg": "Süper Lig", "c": "tr", "n": 1}, {"lg": "La Liga", "c": "es", "n": 1}, {"lg": "Bundesliga", "c": "de", "n": 1}, {"lg": "Ligue 1", "c": "fr", "n": 1}], "SWE": [{"lg": "Premier League", "c": "gb-eng", "n": 10}, {"lg": "Bundesliga", "c": "de", "n": 4}, {"lg": "Allsvenskan", "c": "se", "n": 3}, {"lg": "Serie A", "c": "it", "n": 2}, {"lg": "Belgian Pro", "c": "be", "n": 2}, {"lg": "Primeira Liga", "c": "pt", "n": 1}, {"lg": "MLS", "c": "us", "n": 1}, {"lg": "Scottish Prem", "c": "gb-sct", "n": 1}, {"lg": "Cypriot First", "c": "cy", "n": 1}, {"lg": "La Liga", "c": "es", "n": 1}], "TUN": [{"lg": "Tunisian L1", "c": "tn", "n": 6}, {"lg": "Bundesliga", "c": "de", "n": 4}, {"lg": "Ligue 1", "c": "fr", "n": 3}, {"lg": "Swiss Super", "c": "ch", "n": 3}, {"lg": "Süper Lig", "c": "tr", "n": 2}, {"lg": "Premier League", "c": "gb-eng", "n": 2}, {"lg": "Slovenian PL", "c": "si", "n": 1}, {"lg": "Danish Superliga", "c": "dk", "n": 1}, {"lg": "Russian PL", "c": "ru", "n": 1}, {"lg": "Canadian PL", "c": "ca", "n": 1}, {"lg": "Allsvenskan", "c": "se", "n": 1}, {"lg": "Scottish Prem", "c": "gb-sct", "n": 1}], "BEL": [{"lg": "Premier League", "c": "gb-eng", "n": 7}, {"lg": "Serie A", "c": "it", "n": 5}, {"lg": "Ligue 1", "c": "fr", "n": 5}, {"lg": "Belgian Pro", "c": "be", "n": 3}, {"lg": "La Liga", "c": "es", "n": 2}, {"lg": "Primeira Liga", "c": "pt", "n": 2}, {"lg": "Bundesliga", "c": "de", "n": 1}, {"lg": "Scottish Prem", "c": "gb-sct", "n": 1}], "EGY": [{"lg": "Egyptian PL", "c": "eg", "n": 17}, {"lg": "La Liga", "c": "es", "n": 2}, {"lg": "Premier League", "c": "gb-eng", "n": 2}, {"lg": "UAE Pro League", "c": "ae", "n": 1}, {"lg": "Ligue 1", "c": "fr", "n": 1}, {"lg": "Qatar Stars", "c": "qa", "n": 1}, {"lg": "Saudi Pro League", "c": "sa", "n": 1}, {"lg": "Danish Superliga", "c": "dk", "n": 1}], "IRN": [{"lg": "Persian Gulf PL", "c": "ir", "n": 17}, {"lg": "UAE Pro League", "c": "ae", "n": 5}, {"lg": "Belgian Pro", "c": "be", "n": 2}, {"lg": "Russian PL", "c": "ru", "n": 1}, {"lg": "Super League Greece", "c": "gr", "n": 1}], "NZL": [{"lg": "New Zealand", "c": "nz", "n": 9}, {"lg": "Premier League", "c": "gb-eng", "n": 5}, {"lg": "MLS", "c": "us", "n": 2}, {"lg": "Wales", "c": "gb-wls", "n": 2}, {"lg": "A-League", "c": "au", "n": 2}, {"lg": "Eliteserien", "c": "no", "n": 1}, {"lg": "Scottish Prem", "c": "gb-sct", "n": 1}, {"lg": "Ekstraklasa", "c": "pl", "n": 1}, {"lg": "Ligue 1", "c": "fr", "n": 1}, {"lg": "Danish Superliga", "c": "dk", "n": 1}, {"lg": "Eredivisie", "c": "nl", "n": 1}], "CPV": [{"lg": "Primeira Liga", "c": "pt", "n": 7}, {"lg": "Süper Lig", "c": "tr", "n": 3}, {"lg": "Russian PL", "c": "ru", "n": 2}, {"lg": "Cypriot First", "c": "cy", "n": 2}, {"lg": "Bulgaria First", "c": "bg", "n": 2}, {"lg": "MLS", "c": "us", "n": 2}, {"lg": "UAE Pro League", "c": "ae", "n": 1}, {"lg": "League of Ireland", "c": "ie", "n": 1}, {"lg": "La Liga", "c": "es", "n": 1}, {"lg": "Romania Liga I", "c": "ro", "n": 1}, {"lg": "Eredivisie", "c": "nl", "n": 1}, {"lg": "Hungary NB I", "c": "hu", "n": 1}, {"lg": "Veikkausliiga", "c": "fi", "n": 1}, {"lg": "Israeli PL", "c": "il", "n": 1}], "KSA": [{"lg": "Saudi Pro League", "c": "sa", "n": 25}, {"lg": "Ligue 1", "c": "fr", "n": 1}], "ESP": [{"lg": "La Liga", "c": "es", "n": 17}, {"lg": "Premier League", "c": "gb-eng", "n": 7}, {"lg": "Bundesliga", "c": "de", "n": 1}, {"lg": "Ligue 1", "c": "fr", "n": 1}], "URU": [{"lg": "Brazil Série A", "c": "br", "n": 7}, {"lg": "La Liga", "c": "es", "n": 4}, {"lg": "Liga MX", "c": "mx", "n": 4}, {"lg": "Premier League", "c": "gb-eng", "n": 3}, {"lg": "Liga Argentina", "c": "ar", "n": 2}, {"lg": "Primeira Liga", "c": "pt", "n": 2}, {"lg": "Saudi Pro League", "c": "sa", "n": 1}, {"lg": "Super League Greece", "c": "gr", "n": 1}, {"lg": "Serie A", "c": "it", "n": 1}, {"lg": "MLS", "c": "us", "n": 1}], "FRA": [{"lg": "Ligue 1", "c": "fr", "n": 8}, {"lg": "Premier League", "c": "gb-eng", "n": 7}, {"lg": "Serie A", "c": "it", "n": 4}, {"lg": "La Liga", "c": "es", "n": 3}, {"lg": "Bundesliga", "c": "de", "n": 2}, {"lg": "Süper Lig", "c": "tr", "n": 1}, {"lg": "Saudi Pro League", "c": "sa", "n": 1}], "IRQ": [{"lg": "Iraq Stars", "c": "iq", "n": 10}, {"lg": "Ekstraklasa", "c": "pl", "n": 2}, {"lg": "UAE Pro League", "c": "ae", "n": 2}, {"lg": "Thai League", "c": "th", "n": 1}, {"lg": "Uzbek Super", "c": "uz", "n": 1}, {"lg": "Cypriot First", "c": "cy", "n": 1}, {"lg": "Premier League", "c": "gb-eng", "n": 1}, {"lg": "MLS", "c": "us", "n": 1}, {"lg": "Eredivisie", "c": "nl", "n": 1}, {"lg": "Saudi Pro League", "c": "sa", "n": 1}, {"lg": "Danish Superliga", "c": "dk", "n": 1}, {"lg": "Eliteserien", "c": "no", "n": 1}, {"lg": "Serie A", "c": "it", "n": 1}, {"lg": "Czech Liga", "c": "cz", "n": 1}, {"lg": "Liga 1 (IDN)", "c": "id", "n": 1}], "NOR": [{"lg": "Premier League", "c": "gb-eng", "n": 9}, {"lg": "Serie A", "c": "it", "n": 5}, {"lg": "Eliteserien", "c": "no", "n": 4}, {"lg": "Bundesliga", "c": "de", "n": 3}, {"lg": "La Liga", "c": "es", "n": 2}, {"lg": "Primeira Liga", "c": "pt", "n": 2}, {"lg": "Scottish Prem", "c": "gb-sct", "n": 1}], "SEN": [{"lg": "Ligue 1", "c": "fr", "n": 8}, {"lg": "Premier League", "c": "gb-eng", "n": 7}, {"lg": "Saudi Pro League", "c": "sa", "n": 3}, {"lg": "La Liga", "c": "es", "n": 2}, {"lg": "Bundesliga", "c": "de", "n": 2}, {"lg": "Süper Lig", "c": "tr", "n": 2}, {"lg": "Israeli PL", "c": "il", "n": 1}, {"lg": "Serie A", "c": "it", "n": 1}], "ALG": [{"lg": "Ligue 1", "c": "fr", "n": 5}, {"lg": "Bundesliga", "c": "de", "n": 4}, {"lg": "Algeria L1", "c": "dz", "n": 3}, {"lg": "Swiss Super", "c": "ch", "n": 2}, {"lg": "Eredivisie", "c": "nl", "n": 2}, {"lg": "Saudi Pro League", "c": "sa", "n": 2}, {"lg": "Serie A", "c": "it", "n": 2}, {"lg": "Tunisian L1", "c": "tn", "n": 1}, {"lg": "Hungary NB I", "c": "hu", "n": 1}, {"lg": "Premier League", "c": "gb-eng", "n": 1}, {"lg": "Qatar Stars", "c": "qa", "n": 1}, {"lg": "La Liga", "c": "es", "n": 1}, {"lg": "Belgian Pro", "c": "be", "n": 1}], "ARG": [{"lg": "La Liga", "c": "es", "n": 7}, {"lg": "Premier League", "c": "gb-eng", "n": 6}, {"lg": "Ligue 1", "c": "fr", "n": 4}, {"lg": "Liga Argentina", "c": "ar", "n": 2}, {"lg": "MLS", "c": "us", "n": 2}, {"lg": "Serie A", "c": "it", "n": 2}, {"lg": "Bundesliga", "c": "de", "n": 1}, {"lg": "Primeira Liga", "c": "pt", "n": 1}, {"lg": "Brazil Série A", "c": "br", "n": 1}], "AUT": [{"lg": "Bundesliga", "c": "de", "n": 14}, {"lg": "Austrian BL", "c": "at", "n": 3}, {"lg": "La Liga", "c": "es", "n": 2}, {"lg": "Premier League", "c": "gb-eng", "n": 1}, {"lg": "Serbian SuperLiga", "c": "rs", "n": 1}, {"lg": "Primeira Liga", "c": "pt", "n": 1}, {"lg": "Czech Liga", "c": "cz", "n": 1}, {"lg": "Danish Superliga", "c": "dk", "n": 1}, {"lg": "Eredivisie", "c": "nl", "n": 1}, {"lg": "Serie A", "c": "it", "n": 1}], "JOR": [{"lg": "Jordan Pro", "c": "jo", "n": 12}, {"lg": "Iraq Stars", "c": "iq", "n": 5}, {"lg": "Malaysia SL", "c": "my", "n": 2}, {"lg": "Qatar Stars", "c": "qa", "n": 2}, {"lg": "K League", "c": "kr", "n": 1}, {"lg": "Botola", "c": "ma", "n": 1}, {"lg": "Ligue 1", "c": "fr", "n": 1}, {"lg": "Egyptian PL", "c": "eg", "n": 1}, {"lg": "Saudi Pro League", "c": "sa", "n": 1}], "COL": [{"lg": "Liga Argentina", "c": "ar", "n": 5}, {"lg": "Brazil Série A", "c": "br", "n": 4}, {"lg": "La Liga", "c": "es", "n": 3}, {"lg": "Premier League", "c": "gb-eng", "n": 2}, {"lg": "Serie A", "c": "it", "n": 2}, {"lg": "Primeira Liga", "c": "pt", "n": 2}, {"lg": "Liga MX", "c": "mx", "n": 2}, {"lg": "Colombia Primera", "c": "co", "n": 1}, {"lg": "Bundesliga", "c": "de", "n": 1}, {"lg": "Russian PL", "c": "ru", "n": 1}, {"lg": "MLS", "c": "us", "n": 1}, {"lg": "Ligue 1", "c": "fr", "n": 1}, {"lg": "Süper Lig", "c": "tr", "n": 1}], "COD": [{"lg": "Ligue 1", "c": "fr", "n": 5}, {"lg": "Premier League", "c": "gb-eng", "n": 5}, {"lg": "Super League Greece", "c": "gr", "n": 3}, {"lg": "La Liga", "c": "es", "n": 3}, {"lg": "Belgian Pro", "c": "be", "n": 2}, {"lg": "Ekstraklasa", "c": "pl", "n": 1}, {"lg": "Russian PL", "c": "ru", "n": 1}, {"lg": "Süper Lig", "c": "tr", "n": 1}, {"lg": "Scottish Prem", "c": "gb-sct", "n": 1}, {"lg": "Armenia", "c": "am", "n": 1}, {"lg": "Egyptian PL", "c": "eg", "n": 1}, {"lg": "UAE Pro League", "c": "ae", "n": 1}, {"lg": "Cypriot First", "c": "cy", "n": 1}], "POR": [{"lg": "Premier League", "c": "gb-eng", "n": 7}, {"lg": "Primeira Liga", "c": "pt", "n": 5}, {"lg": "Ligue 1", "c": "fr", "n": 4}, {"lg": "La Liga", "c": "es", "n": 4}, {"lg": "Saudi Pro League", "c": "sa", "n": 3}, {"lg": "Serie A", "c": "it", "n": 2}, {"lg": "Süper Lig", "c": "tr", "n": 1}], "UZB": [{"lg": "Uzbek Super", "c": "uz", "n": 16}, {"lg": "Persian Gulf PL", "c": "ir", "n": 4}, {"lg": "UAE Pro League", "c": "ae", "n": 3}, {"lg": "Süper Lig", "c": "tr", "n": 2}, {"lg": "Premier League", "c": "gb-eng", "n": 1}], "CRO": [{"lg": "Serie A", "c": "it", "n": 7}, {"lg": "Bundesliga", "c": "de", "n": 5}, {"lg": "Premier League", "c": "gb-eng", "n": 3}, {"lg": "La Liga", "c": "es", "n": 3}, {"lg": "HNL (Croatia)", "c": "hr", "n": 2}, {"lg": "Eredivisie", "c": "nl", "n": 2}, {"lg": "Danish Superliga", "c": "dk", "n": 2}, {"lg": "MLS", "c": "us", "n": 2}], "ENG": [{"lg": "Premier League", "c": "gb-eng", "n": 21}, {"lg": "Bundesliga", "c": "de", "n": 2}, {"lg": "La Liga", "c": "es", "n": 2}, {"lg": "Saudi Pro League", "c": "sa", "n": 1}], "GHA": [{"lg": "Ligue 1", "c": "fr", "n": 7}, {"lg": "La Liga", "c": "es", "n": 4}, {"lg": "Premier League", "c": "gb-eng", "n": 4}, {"lg": "Swiss Super", "c": "ch", "n": 1}, {"lg": "Danish Superliga", "c": "dk", "n": 1}, {"lg": "Bundesliga", "c": "de", "n": 1}, {"lg": "League of Ireland", "c": "ie", "n": 1}, {"lg": "Saudi Pro League", "c": "sa", "n": 1}, {"lg": "Ghana PL", "c": "gh", "n": 1}, {"lg": "Super League Greece", "c": "gr", "n": 1}, {"lg": "Süper Lig", "c": "tr", "n": 1}, {"lg": "Serie A", "c": "it", "n": 1}, {"lg": "Cypriot First", "c": "cy", "n": 1}, {"lg": "Czech Liga", "c": "cz", "n": 1}], "PAN": [{"lg": "Liga MX", "c": "mx", "n": 4}, {"lg": "Costa Rica Primera", "c": "cr", "n": 2}, {"lg": "Venezuela", "c": "ve", "n": 2}, {"lg": "MLS", "c": "us", "n": 2}, {"lg": "Panama", "c": "pa", "n": 2}, {"lg": "Ecuador Serie A", "c": "ec", "n": 2}, {"lg": "Chile Primera", "c": "cl", "n": 2}, {"lg": "Uruguay Primera", "c": "uy", "n": 1}, {"lg": "Slovak SL", "c": "sk", "n": 1}, {"lg": "Premier League", "c": "gb-eng", "n": 1}, {"lg": "Russian PL", "c": "ru", "n": 1}, {"lg": "Israeli PL", "c": "il", "n": 1}, {"lg": "Honduras", "c": "hn", "n": 1}, {"lg": "Austrian BL", "c": "at", "n": 1}, {"lg": "Saudi Pro League", "c": "sa", "n": 1}, {"lg": "Süper Lig", "c": "tr", "n": 1}, {"lg": "Azerbaijan PL", "c": "az", "n": 1}]};
+
+  // ===================================================================
+  //  STATE
+  // ===================================================================
+  let map, geoLayer, colourMode = 'continent', isLive = false, lastUpdated = null, selectedId = null;
+  const teamsById = new Map();      // id -> team record
+  const teamsByIso3 = new Map();    // iso3 -> [team records] (GBR holds England + Scotland)
+  const gamesByTeam = new Map();    // id -> [game]
+  const layerByIso3 = new Map();    // iso3 -> leaflet layer
+  const metaByIso3 = new Map();     // iso3 -> { continent, pop } from Natural Earth
+  const mainBoundsByIso3 = new Map(); // iso3 -> largest-landmass bounds (mainland)
+  const gamesById = new Map();      // match id -> game (for the knockout bracket)
+  let groupsOrdered = [];           // [[ 'A', [rows...] ], ...]
+
+  // ===================================================================
+  //  DATA
+  // ===================================================================
+  const num = (v) => Number(v) || 0;
+  const fetchJSON = async (u) => { const r = await fetch(u, { cache:'no-store' }); if (!r.ok) throw new Error(u+' '+r.status); return r.json(); };
+  // "06/13/2026 21:00" -> sortable key + display
+  const dateKey = (s) => { const m = /(\d+)\/(\d+)\/(\d+)\s+(\d+):(\d+)/.exec(s||''); return m ? m[3]+m[1].padStart(2,'0')+m[2].padStart(2,'0')+m[4].padStart(2,'0')+m[5] : '0'; };
+  const dateLabel = (s) => { const m = /(\d+)\/(\d+)\/(\d+)/.exec(s||''); return m ? `${m[1]}/${m[2]}` : ''; };
+
+  async function loadData() {
+    try {
+      const [tj, gj, mj] = await Promise.all([
+        fetchJSON(CONFIG.api + '/teams'), fetchJSON(CONFIG.api + '/groups'), fetchJSON(CONFIG.api + '/games'),
+      ]);
+      ingest(tj.teams || tj, gj.groups || gj, mj.games || mj);
+      isLive = true;
+      lastUpdated = (gj.groups || gj).map(g => g.updatedAt).filter(Boolean).sort().pop() || null;
+    } catch (e) {
+      console.warn('Live API failed — falling back to static repo JSON.', e);
+      try {
+        const [tj, gj] = await Promise.all([ fetchJSON(CONFIG.staticTeams), fetchJSON(CONFIG.staticGroups) ]);
+        ingest(tj.teams || tj, gj.groups || gj, []);
+        isLive = false;
+      } catch (e2) { console.error('All data sources failed.', e2); ingest([], [], []); }
+    }
+  }
+
+  function ingest(teams, groups, games) {
+    teamsById.clear(); teamsByIso3.clear(); gamesByTeam.clear(); gamesById.clear();
+    for (const t of teams) {
+      const iso3 = toIso3(t.fifa_code);
+      const rec = { id:String(t.id), name:t.name_en, fifa:t.fifa_code, iso2:t.iso2, iso3,
+                    flag:t.flag, group:t.groups };
+      teamsById.set(rec.id, rec);
+      if (!teamsByIso3.has(iso3)) teamsByIso3.set(iso3, []);
+      teamsByIso3.get(iso3).push(rec);
+    }
+    for (const g of games) {
+      const game = { id:String(g.id), homeId:String(g.home_team_id), awayId:String(g.away_team_id),
+                     hs:num(g.home_score), as:num(g.away_score), finished:String(g.finished).toUpperCase()==='TRUE',
+                     group:g.group, matchday:g.matchday, date:g.local_date, key:dateKey(g.local_date),
+                     homeName:g.home_team_name_en, awayName:g.away_team_name_en, type:g.type };
+      gamesById.set(game.id, game);
+      for (const id of [game.homeId, game.awayId]) {
+        if (!gamesByTeam.has(id)) gamesByTeam.set(id, []);
+        gamesByTeam.get(id).push(game);
+      }
+    }
+    const byName = {};
+    for (const grp of groups) {
+      byName[grp.name] = (grp.teams || []).map(s => {
+        const rec = teamsById.get(String(s.team_id)) || { id:String(s.team_id), name:'#'+s.team_id, iso3:'', group:grp.name };
+        return { ...rec, mp:num(s.mp), w:num(s.w), d:num(s.d), l:num(s.l),
+                 gf:num(s.gf), ga:num(s.ga), gd:num(s.gd), pts:num(s.pts), tcs:null };
+      });
+    }
+    groupsOrdered = Object.keys(byName).sort().map(n => [n, byName[n]]);
+  }
+
+  function teamForm(id) {
+    return (gamesByTeam.get(id) || []).filter(g => g.finished).sort((a,b)=>a.key.localeCompare(b.key))
+      .map(g => { const home = g.homeId===id; const gf = home?g.hs:g.as, ga = home?g.as:g.hs;
+                  return gf>ga ? 'W' : gf<ga ? 'L' : 'D'; });
+  }
+
+  // ===================================================================
+  //  SIDEBAR
+  // ===================================================================
+  const sign = (n) => n>0 ? '+'+n : ''+n;
+  function formDots(id) {
+    const f = teamForm(id); const slots = [];
+    for (let i=0;i<3;i++) slots.push(f[i] ? `<span class="fdot ${f[i]}"></span>` : `<span class="fdot n">–</span>`);
+    return slots.join('');
+  }
+
+  function renderSidebar() {
+    const root = document.getElementById('groups');
+    root.innerHTML = groupsOrdered.map(([g, rows]) => `
+      <section class="group" data-group="${g}">
+        <h2>Group ${g}
+            <span class="gcount">${rows.length} teams</span></h2>
+        <div class="thead"><span></span><span></span><span>Team</span>
+          <span class="c">P</span><span class="c">GD</span><span class="r">Pts</span><span class="r">Form</span></div>
+        ${rows.map((r,i) => `
+          <div class="team" role="button" tabindex="0" data-id="${r.id}"
+               data-search="${(r.name+' group '+g).toLowerCase()}" aria-label="${r.name}, Group ${g}">
+            <span class="pos">${i+1}</span>
+            <img class="flag" loading="lazy" src="${r.flag}" alt="" />
+            <span class="name">${r.name}</span>
+            <span class="num">${r.mp}</span>
+            <span class="num">${sign(r.gd)}</span>
+            <span class="num pts">${r.pts}</span>
+            <span class="form">${formDots(r.id)}</span>
+          </div>`).join('')}
+      </section>`).join('');
+
+    root.querySelectorAll('.team').forEach(el => {
+      const id = el.dataset.id;
+      el.addEventListener('click', () => selectTeam(id));
+      el.addEventListener('keydown', e => { if (e.key==='Enter'||e.key===' ') { e.preventDefault(); selectTeam(id); } });
+    });
+  }
+
+  function filterSidebar(q) {
+    q = q.trim().toLowerCase();
+    document.querySelectorAll('#groups .team').forEach(el => {
+      el.style.display = (!q || el.dataset.search.includes(q)) ? '' : 'none';
+    });
+    document.querySelectorAll('#groups .group').forEach(sec => {
+      sec.style.display = [...sec.querySelectorAll('.team')].some(el => el.style.display!=='none') ? '' : 'none';
+    });
+  }
+
+  // ===================================================================
+  //  MAP
+  // ===================================================================
+  function initMap() {
+    map = L.map('map', { worldCopyJump:true, minZoom:1, maxZoom:7, zoomControl:true }).setView([18,-35], 2.4);
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
+      { attribution:'© OpenStreetMap, © CARTO', subdomains:'abcd', maxZoom:19 }).addTo(map);
+    L.control.scale({ imperial:false, position:'bottomright' }).addTo(map);
+  }
+  function getIso3(f) { const p=f.properties||{};
+    if (p.ADM0_A3 && p.ADM0_A3!=='-99') return p.ADM0_A3;
+    if (p.ISO_A3_EH && p.ISO_A3_EH!=='-99') return p.ISO_A3_EH;
+    return p.ISO_A3; }
+  const isQualified = (iso3) => teamsByIso3.has(iso3);
+
+  function fillFor(iso3) {
+    if (colourMode==='single') return CONFIG.style.single;
+    const m = metaByIso3.get(iso3);
+    return (m && CONTINENT_COLOURS[m.continent]) ? CONTINENT_COLOURS[m.continent] : CONFIG.style.single;
+  }
+  function styleFor(f) {
+    const iso3 = getIso3(f);
+    if (iso3===selIso3()) return CONFIG.style.selected;
+    if (!isQualified(iso3)) return CONFIG.style.base;
+    return { color:'#ffffff', weight:0.8, fillColor:fillFor(iso3), fillOpacity:0.62 };
+  }
+  const selIso3 = () => { const r = teamsById.get(selectedId); return r ? r.iso3 : null; };
+
+  // Bounds of a feature's largest landmass — so the USA zooms to the contiguous mainland
+  // (not Alaska/Hawaii), France to metropolitan France, Ecuador to the mainland, etc.
+  function ringArea(ring){ let a=0; for (let i=0,j=ring.length-1;i<ring.length;j=i++){ a += ring[j][0]*ring[i][1]-ring[i][0]*ring[j][1]; } return Math.abs(a/2); }
+  function mainlandBounds(f, fullBounds){
+    const g = f.geometry; if (!g || g.type!=='MultiPolygon') return fullBounds;
+    let best=null, bestA=-1;
+    for (const poly of g.coordinates){ const a=ringArea(poly[0]); if (a>bestA){ bestA=a; best=poly[0]; } }
+    if (!best) return fullBounds;
+    const lats=best.map(c=>c[1]), lngs=best.map(c=>c[0]);
+    return L.latLngBounds([Math.min(...lats),Math.min(...lngs)],[Math.max(...lats),Math.max(...lngs)]);
+  }
+
+  async function loadBoundaries() {
+    let data;
+    try { const r = await fetch(CONFIG.geojsonUrl); if (!r.ok) throw new Error('HTTP '+r.status); data = await r.json(); }
+    catch (e) { console.warn('Primary GeoJSON failed, trying fallback…', e); data = await (await fetch(CONFIG.geojsonFallback)).json(); }
+
+    geoLayer = L.geoJSON(data, {
+      style: styleFor,
+      onEachFeature: (f, layer) => {
+        const iso3 = getIso3(f);
+        if (!isQualified(iso3)) return;
+        layerByIso3.set(iso3, layer);
+        metaByIso3.set(iso3, { continent:(f.properties||{}).CONTINENT, pop:(f.properties||{}).POP_EST });
+        mainBoundsByIso3.set(iso3, mainlandBounds(f, layer.getBounds()));
+        layer.on('mouseover', () => { if (iso3!==selIso3()) layer.setStyle({ fillOpacity:0.82 }); });
+        layer.on('mouseout',  () => { if (iso3!==selIso3()) layer.setStyle(styleFor(f)); });
+        layer.on('click', () => { const recs = teamsByIso3.get(iso3); if (recs && recs[0]) selectTeam(recs[0].id); });
+      },
+    }).addTo(map);
+    restyleAll();   // metaByIso3 is now populated → apply continent colours
+  }
+  function restyleAll() { if (geoLayer) geoLayer.setStyle(styleFor); }
+
+  // ===================================================================
+  //  SELECTION + DETAIL PANEL
+  // ===================================================================
+  function selectTeam(id) {
+    const rec = teamsById.get(id); if (!rec) return;
+    const prevIso = selIso3();
+    selectedId = id;
+    if (prevIso && layerByIso3.has(prevIso)) layerByIso3.get(prevIso).setStyle(styleFor({ properties:{ ADM0_A3:prevIso } }));
+
+    document.querySelectorAll('#groups .team').forEach(el => el.classList.remove('active'));
+    const row = document.querySelector(`#groups .team[data-id="${id}"]`);
+    if (row) { row.classList.add('active'); row.scrollIntoView({ block:'nearest', behavior:'smooth' }); }
+
+    const layer = layerByIso3.get(rec.iso3);
+    if (layer) {
+      layer.setStyle(CONFIG.style.selected); layer.bringToFront();
+      // Pad the right for the detail panel, but scale to map width so narrow maps still zoom in.
+      const w = map.getSize().x;
+      const rightPad = Math.round(Math.min(310, Math.max(20, w * 0.38)));
+      const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      const zoomBounds = mainBoundsByIso3.get(rec.iso3) || layer.getBounds();
+      map.flyToBounds(zoomBounds,
+        { paddingTopLeft:[28,28], paddingBottomRight:[rightPad,28], maxZoom:6, duration:1.1, animate:!reduce });
+    } else { console.warn('No polygon for', rec.iso3); }
+    renderDetail(rec);
+  }
+
+  function standingRow(id) {
+    for (const [g, rows] of groupsOrdered) { const i = rows.findIndex(r => r.id===id); if (i>=0) return { row:rows[i], pos:i+1, group:g }; }
+    return null;
+  }
+
+  function renderDetail(rec) {
+    const s = standingRow(rec.id); const r = s ? s.row : rec;
+    document.getElementById('dFlag').src = rec.flag;
+    document.getElementById('dName').textContent = rec.name;
+    const meta = metaByIso3.get(rec.iso3) || {};
+    const popTxt = meta.pop ? ' · Pop ' + fmtPop(meta.pop) : '';
+    document.getElementById('dGroup').textContent = `Group ${rec.group}${s ? ' · '+ordinal(s.pos)+' place' : ''}${popTxt}`;
+    document.getElementById('dStats').innerHTML = s ? `
+      <span class="pill">P <b>${r.mp}</b></span><span class="pill">W <b>${r.w}</b></span>
+      <span class="pill">D <b>${r.d}</b></span><span class="pill">L <b>${r.l}</b></span>
+      <span class="pill">GF <b>${r.gf}</b></span><span class="pill">GA <b>${r.ga}</b></span>
+      <span class="pill">GD <b>${sign(r.gd)}</b></span><span class="pill">Pts <b>${r.pts}</b></span>` : '';
+
+    // bar chart
+    const data = SQUAD_LEAGUES[rec.fifa];
+    const chart = document.getElementById('dChart');
+    if (data && data.length) {
+      const all = [...data].sort((a,b)=>b.n-a.n);
+      const TOP = 8; let rows = all;
+      if (all.length > TOP) {
+        const restN = all.slice(TOP).reduce((s,d)=>s+d.n,0);
+        rows = all.slice(0,TOP).concat([{ lg:`Other · ${all.length-TOP} leagues`, c:'', n:restN, other:true }]);
+      }
+      const max = Math.max(...rows.map(d=>d.n));
+      const col = CONTINENT_COLOURS[(metaByIso3.get(rec.iso3)||{}).continent] || CONFIG.style.single;
+      const total = all.reduce((s,d)=>s+d.n,0);
+      chart.innerHTML = `<div class="bars">` + rows.map(d => `
+        <div class="bar-row">
+          <span class="bar-lab">${d.other?'':`<img src="https://flagcdn.com/24x18/${d.c}.png" alt="">`}${d.lg}</span>
+          <span class="bar-track"><span class="bar-fill" style="width:${Math.round(d.n/max*100)}%;background:${d.other?'#cbd5e1':col}"></span></span>
+          <span class="bar-n">${d.n}</span>
+        </div>`).join('') + `</div><div style="font-size:10px;color:var(--muted);margin:-8px 0 14px">${total} squad players · ${all.length} leagues</div>`;
+    } else {
+      chart.innerHTML = `<div class="empty">Squad-league breakdown for <b>${rec.name}</b> isn't wired yet.
+        Plug a squad source (e.g. API-Football <code>/players/squads</code>) into <code>SQUAD_LEAGUES['${rec.fifa}']</code>.</div>`;
+    }
+
+    // fixtures
+    const fx = (gamesByTeam.get(rec.id) || []).filter(g => g.type==='group').slice().sort((a,b)=>a.key.localeCompare(b.key));
+    const fxEl = document.getElementById('dFixtures');
+    fxEl.innerHTML = fx.length ? fx.map(g => {
+      const home = g.homeId===rec.id; const oppId = home?g.awayId:g.homeId;
+      const opp = teamsById.get(oppId) || { name: (home?g.awayName:g.homeName) || 'TBD', flag:'' };
+      let res;
+      if (g.finished) { const gf=home?g.hs:g.as, ga=home?g.as:g.hs; const o=gf>ga?'W':gf<ga?'L':'D';
+        res = `<span class="res ${o}">${gf}–${ga}</span>`; }
+      else res = `<span class="res sched">${dateLabel(g.date)||'TBD'}</span>`;
+      return `<div class="fx"><span class="md">MD${g.matchday}</span>
+        <span class="opp"><img src="${opp.flag}" alt="">${home?'':'@ '}${opp.name}</span>${res}</div>`;
+    }).join('') : `<div class="empty">No fixtures available${isLive?'':' (static fallback — start the live API for fixtures)'}.</div>`;
+
+    document.getElementById('dFoot').innerHTML =
+      `Standings &amp; fixtures: live · worldcup26.ir. Squad leagues: Wikipedia 2026 WC squads (by club country). Population: Natural Earth.`;
+    document.getElementById('detail').classList.add('open');
+  }
+  const ordinal = (n) => n+({1:'st',2:'nd',3:'rd'}[n]||'th');
+  const fmtPop = (n) => n>=1e9 ? (n/1e9).toFixed(2)+'B' : n>=1e6 ? (n/1e6).toFixed(1)+'M' : n>=1e3 ? Math.round(n/1e3)+'K' : ''+n;
+
+  function closeDetail() {
+    document.getElementById('detail').classList.remove('open');
+    const iso = selIso3();
+    selectedId = null;
+    if (iso && layerByIso3.has(iso)) layerByIso3.get(iso).setStyle(styleFor({ properties:{ ADM0_A3:iso } }));
+    document.querySelectorAll('#groups .team').forEach(el => el.classList.remove('active'));
+  }
+  function resetView() { closeDetail(); map.flyTo([18,-35], 2.4, { duration:1.0 }); }
+
+  function updateBadge() {
+    const b = document.getElementById('dataBadge');
+    b.className = 'badge ' + (isLive ? 'live' : 'mock');
+    let txt = isLive ? 'Live' : 'Static fallback';
+    if (isLive && lastUpdated) { try { txt += ' · ' + new Date(lastUpdated).toLocaleDateString('en-GB',{day:'numeric',month:'short'}); } catch(e){} }
+    document.getElementById('dataBadgeText').textContent = txt;
+    document.getElementById('mapNote').innerHTML =
+      `48 teams · 12 groups · click a nation to zoom in<br>` +
+      `Tiles © OpenStreetMap, © CARTO · Boundaries: Natural Earth 1:50m · Data: worldcup26.ir<br>` +
+      `CRS: EPSG:3857 (tiles) / EPSG:4326 (data) · ${new Date().toLocaleDateString('en-GB')}`;
+  }
+
+  // ===================================================================
+  //  BOOT
+  // ===================================================================
+  // ===================================================================
+  //  KNOCKOUT BRACKET — structure from the official 2026 bracket
+  //  (Wikipedia RoundN); live teams + scores joined from the API by match id.
+  // ===================================================================
+  const ROUND_H = { r32:'Round of 32', r16:'Round of 16', qf:'Quarter-final', sf:'Semi-final' };
+  const BK_LEFT  = { r32:[74,77,73,75,83,84,81,82], r16:[89,90,93,94], qf:[97,98], sf:[101] };
+  const BK_RIGHT = { r32:[76,78,79,80,86,88,85,87], r16:[91,92,95,96], qf:[99,100], sf:[102] };
+  const BK_FINAL = 104, BK_THIRD = 103;
+  const FEEDERS = {
+    74:['1E','3rd A/B/C/D/F'], 77:['1I','3rd C/D/F/G/H'], 73:['2A','2B'], 75:['1F','2C'],
+    83:['2K','2L'], 84:['1H','2J'], 81:['1D','3rd B/E/I'], 82:['1G','3rd A/E/H/I/J'],
+    76:['1C','2F'], 78:['2E','2I'], 79:['1A','3rd C/E/F/H/I'], 80:['1L','3rd E/H/I/J/K'],
+    86:['1J','2H'], 88:['2D','2G'], 85:['1B','3rd E/F/G/I/J'], 87:['1K','3rd D/E/I/J/L'],
+    89:['W74','W77'], 90:['W73','W75'], 93:['W83','W84'], 94:['W81','W82'],
+    91:['W76','W78'], 92:['W79','W80'], 95:['W86','W88'], 96:['W85','W87'],
+    97:['W89','W90'], 98:['W93','W94'], 99:['W91','W92'], 100:['W95','W96'],
+    101:['W97','W98'], 102:['W99','W100'], 104:['W101','W102'], 103:['L101','L102'],
+  };
+
+  function bkSlot(teamId, feeder, score, isWin, finished) {
+    const t = teamsById.get(String(teamId));
+    if (t) return `<div class="mteam pick ${isWin?'win':''}" data-team="${t.id}" title="${t.name}">
+      <img src="${t.flag}" alt=""><span class="mc">${t.fifa}</span><span class="ms">${finished?score:''}</span></div>`;
+    return `<div class="mteam tbd"><span class="mlabel">${feeder}</span><span class="ms"></span></div>`;
+  }
+  function matchBox(id) {
+    const g = gamesById.get(String(id)); const [fh,fa] = FEEDERS[id] || ['',''];
+    const fin = g ? g.finished : false; const hs = g?g.hs:'', as = g?g.as:'';
+    const date = g ? dateLabel(g.date) : '';
+    return `<div class="mbox ${fin?'fin':''}" data-mid="${id}"><div class="mdate">M${id}${date?' · '+date:''}</div>
+      ${bkSlot(g&&g.homeId, fh, hs, fin&&hs>as, fin)}
+      ${bkSlot(g&&g.awayId, fa, as, fin&&as>hs, fin)}</div>`;
+  }
+  const bkCol = (round, ids) => `<div class="bk-col"><div class="bk-h">${ROUND_H[round]}</div>
+    <div class="bk-matches">${ids.map(matchBox).join('')}</div></div>`;
+  const bkHalf = (cls, d) => `<div class="bk-half ${cls}">${bkCol('r32',d.r32)}${bkCol('r16',d.r16)}${bkCol('qf',d.qf)}${bkCol('sf',d.sf)}</div>`;
+
+  function buildBracket() {
+    const centre = `<div class="bk-center"><div class="bk-h">Final</div>
+      <div class="bk-final-box">${matchBox(BK_FINAL)}</div>
+      <div class="bk-third"><div class="lab">Match for third place</div>${matchBox(BK_THIRD)}</div></div>`;
+    document.getElementById('bracket-view').innerHTML =
+      `<h2 class="bk-title">Knockout bracket
+        <span style="font-weight:500;color:var(--muted);font-size:13px">· bold = winner · click a placed team to view it on the map</span></h2>
+      <div class="bracket">${bkHalf('left',BK_LEFT)}${centre}${bkHalf('right',BK_RIGHT)}</div>`;
+    drawConnectors();
+  }
+
+  // Receiver match id -> its two feeder match ids (for drawing the elbow connectors).
+  const BK_FEEDS = { 89:[74,77],90:[73,75],93:[83,84],94:[81,82],91:[76,78],92:[79,80],95:[86,88],96:[85,87],
+                     97:[89,90],98:[93,94],99:[91,92],100:[95,96],101:[97,98],102:[99,100],104:[101,102] };
+  function drawConnectors() {
+    const wrap = document.querySelector('#bracket-view .bracket'); if (!wrap) return;
+    const old = wrap.querySelector('svg.bk-lines'); if (old) old.remove();
+    const wr = wrap.getBoundingClientRect(); if (!wr.width) return;
+    const NS = 'http://www.w3.org/2000/svg';
+    const svg = document.createElementNS(NS,'svg'); svg.setAttribute('class','bk-lines');
+    svg.style.cssText = 'position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none;overflow:visible;z-index:0;';
+    const boxOf = id => wrap.querySelector('.mbox[data-mid="'+id+'"]');
+    for (const rid in BK_FEEDS) {
+      const rEl = boxOf(rid); if (!rEl) continue; const r = rEl.getBoundingClientRect();
+      for (const fid of BK_FEEDS[rid]) {
+        const fEl = boxOf(fid); if (!fEl) continue; const f = fEl.getBoundingClientRect();
+        const leftHalf = f.right <= r.left + 1;
+        const fx = (leftHalf?f.right:f.left) - wr.left, fy = f.top + f.height/2 - wr.top;
+        const rx = (leftHalf?r.left:r.right) - wr.left, ry = r.top + r.height/2 - wr.top;
+        const mx = (fx + rx) / 2;
+        const p = document.createElementNS(NS,'path');
+        p.setAttribute('d', 'M'+fx+' '+fy+' H'+mx+' V'+ry+' H'+rx);
+        p.setAttribute('fill','none'); p.setAttribute('stroke-width','1.5');
+        svg.appendChild(p);
+      }
+    }
+    wrap.insertBefore(svg, wrap.firstChild);
+  }
+
+  function setView(v) {
+    document.querySelectorAll('#viewSeg button').forEach(x => x.classList.toggle('on', x.dataset.view===v));
+    document.body.classList.toggle('view-bracket', v==='bracket');
+    document.getElementById('colourSeg').style.display = v==='bracket' ? 'none' : '';
+    if (v==='bracket') buildBracket();
+    else if (map) map.invalidateSize();
+  }
+
+  async function boot() {
+    initMap();
+    document.getElementById('mapNote').textContent = 'Loading live data…';
+    await loadData();
+    updateBadge();
+    renderSidebar();
+    await loadBoundaries();
+
+    document.getElementById('search').addEventListener('input', e => filterSidebar(e.target.value));
+    document.getElementById('resetBtn').addEventListener('click', resetView);
+    document.getElementById('dClose').addEventListener('click', closeDetail);
+    document.getElementById('refreshBtn').addEventListener('click', async () => {
+      await loadData(); updateBadge(); renderSidebar(); restyleAll();
+      if (document.body.classList.contains('view-bracket')) buildBracket();
+      if (selectedId && teamsById.has(selectedId)) selectTeam(selectedId);
+    });
+    document.getElementById('colourSeg').addEventListener('click', e => {
+      const btn = e.target.closest('button'); if (!btn) return;
+      colourMode = btn.dataset.mode;
+      document.querySelectorAll('#colourSeg button').forEach(b => b.classList.toggle('on', b===btn));
+      restyleAll();
+    });
+    document.getElementById('viewSeg').addEventListener('click', e => {
+      const b = e.target.closest('button'); if (!b) return; setView(b.dataset.view);
+    });
+    document.getElementById('bracket-view').addEventListener('click', e => {
+      const el = e.target.closest('.mteam.pick'); if (!el) return;
+      setView('map'); selectTeam(el.dataset.team);
+    });
+    window.addEventListener('resize', () => { if (document.body.classList.contains('view-bracket')) drawConnectors(); });
+
+    // Live auto-refresh: re-pull standings / fixtures / bracket every 60s, preserving the current view.
+    setInterval(async () => {
+      await loadData(); updateBadge(); renderSidebar();
+      if (selectedId) { const row = document.querySelector(`#groups .team[data-id="${selectedId}"]`); if (row) row.classList.add('active'); }
+      if (selectedId && teamsById.has(selectedId) && document.getElementById('detail').classList.contains('open'))
+        renderDetail(teamsById.get(selectedId));
+      if (document.body.classList.contains('view-bracket')) buildBracket();
+    }, 60000);
+  }
+  boot();
+  </script>
+</body>
+</html>
