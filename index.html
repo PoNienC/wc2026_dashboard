@@ -37,7 +37,7 @@
              border:1px solid var(--line);background:#fff;color:var(--ink);}
   button.btn:hover{background:#f9fafb;border-color:#d1d5db;}
 
-  main{flex:1 1 auto;display:flex;min-height:0;}
+  main{flex:1 1 auto;display:flex;min-height:0;position:relative;}
 
   /* Sidebar */
   #sidebar{flex:0 0 392px;max-width:392px;background:var(--bg);border-right:1px solid var(--line);
@@ -126,9 +126,15 @@
          padding:12px;line-height:1.5;margin-bottom:16px;}
 
   /* Bracket view */
-  #bracket-view{display:none;flex:1 1 auto;overflow:auto;background:var(--bg);padding:16px 20px 30px;}
-  body.view-bracket #sidebar, body.view-bracket #map-wrap{display:none;}
+  #bracket-view{display:none;position:absolute;inset:0;z-index:500;overflow:auto;background:transparent;padding:16px 20px 30px;}
+  body.view-bracket #sidebar{display:none;}
+  body.view-bracket #detail{display:none !important;}
   body.view-bracket #bracket-view{display:block;}
+  /* greyed world map shows through as the bracket backdrop */
+  body.view-bracket .leaflet-tile-pane{filter:grayscale(1) brightness(1.06) opacity(0.5);}
+  body.view-bracket .map-note{display:none;}
+  body.view-bracket .leaflet-control-zoom{display:none;}
+  .bk-title{text-shadow:0 1px 8px rgba(255,255,255,.95),0 0 2px rgba(255,255,255,.95);}
   .bk-title{font-size:18px;font-weight:700;margin:0 0 14px;letter-spacing:-.2px;}
   .bracket{display:flex;align-items:stretch;gap:12px;min-width:1180px;min-height:740px;position:relative;}
   svg.bk-lines path{stroke:#d1d5db;}
@@ -144,6 +150,7 @@
   .mteam+.mteam{border-top:1px solid #f1f2f4;}
   .mteam.pick{cursor:pointer;}
   .mteam.pick:hover{background:#eef5ff;}
+  .mteam.bkactive{background:#fff7ec;box-shadow:inset 3px 0 0 var(--selected);}
   .mteam img{width:21px;height:15px;border-radius:1px;box-shadow:0 0 0 1px rgba(0,0,0,.1);flex:0 0 auto;}
   .mteam .mc{font-weight:600;}
   .mteam.tbd .mlabel{color:#9aa3af;font-size:11px;}
@@ -242,6 +249,7 @@
       base:     { color:'#cbd5e1', weight:0.5, fillColor:'#e5e7eb', fillOpacity:0.30 },
       selected: { color:'#b45309', weight:1.8, fillColor:'#f59e0b', fillOpacity:0.85 },
       single:   '#16a34a',
+      muted:    { color:'#cbd5e1', weight:0.5, fillColor:'#94a3b8', fillOpacity:0.30 },
     },
   };
 
@@ -262,7 +270,7 @@
   // ===================================================================
   //  STATE
   // ===================================================================
-  let map, geoLayer, colourMode = 'continent', isLive = false, lastUpdated = null, selectedId = null;
+  let map, geoLayer, colourMode = 'continent', isLive = false, lastUpdated = null, selectedId = null, bkHi = null;
   const teamsById = new Map();      // id -> team record
   const teamsByIso3 = new Map();    // iso3 -> [team records] (GBR holds England + Scotland)
   const gamesByTeam = new Map();    // id -> [game]
@@ -407,6 +415,10 @@
   }
   function styleFor(f) {
     const iso3 = getIso3(f);
+    if (document.body.classList.contains('view-bracket')) {       // greyed backdrop; only the picked nation pops
+      if (iso3===bkHi) return CONFIG.style.selected;
+      return isQualified(iso3) ? CONFIG.style.muted : CONFIG.style.base;
+    }
     if (iso3===selIso3()) return CONFIG.style.selected;
     if (!isQualified(iso3)) return CONFIG.style.base;
     return { color:'#ffffff', weight:0.8, fillColor:fillFor(iso3), fillOpacity:0.62 };
@@ -641,8 +653,24 @@
     document.querySelectorAll('#viewSeg button').forEach(x => x.classList.toggle('on', x.dataset.view===v));
     document.body.classList.toggle('view-bracket', v==='bracket');
     document.getElementById('colourSeg').style.display = v==='bracket' ? 'none' : '';
-    if (v==='bracket') buildBracket();
-    else if (map) map.invalidateSize();
+    if (v==='bracket') {
+      buildBracket();
+      if (map) { map.invalidateSize(); map.setView([20,0], 2, { animate:false }); }
+    } else if (map) {
+      map.invalidateSize();
+    }
+    restyleAll();   // muted-grey backdrop in bracket view; continent colours in map view
+  }
+
+  // Bracket click: highlight the nation on the backdrop map, no zoom, stay in the bracket.
+  function highlightNation(id) {
+    const rec = teamsById.get(String(id)); if (!rec) return;
+    const prev = bkHi; bkHi = rec.iso3;
+    if (prev && prev!==bkHi && layerByIso3.has(prev)) layerByIso3.get(prev).setStyle(styleFor({ properties:{ ADM0_A3:prev } }));
+    const layer = layerByIso3.get(rec.iso3);
+    if (layer) { layer.setStyle(CONFIG.style.selected); layer.bringToFront(); }
+    document.querySelectorAll('#bracket-view .mteam.bkactive').forEach(e => e.classList.remove('bkactive'));
+    document.querySelectorAll('#bracket-view .mteam.pick[data-team="'+id+'"]').forEach(e => e.classList.add('bkactive'));
   }
 
   async function boot() {
@@ -672,7 +700,7 @@
     });
     document.getElementById('bracket-view').addEventListener('click', e => {
       const el = e.target.closest('.mteam.pick'); if (!el) return;
-      setView('map'); selectTeam(el.dataset.team);
+      highlightNation(el.dataset.team);
     });
     window.addEventListener('resize', () => { if (document.body.classList.contains('view-bracket')) drawConnectors(); });
 
