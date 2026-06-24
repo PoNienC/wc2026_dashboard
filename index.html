@@ -257,6 +257,8 @@
     // Boundaries: Natural Earth 1:50m (full coverage incl. Cape Verde, Curaçao). Match on ADM0_A3.
     geojsonUrl:      'https://cdn.jsdelivr.net/gh/nvkelso/natural-earth-vector@master/geojson/ne_50m_admin_0_countries.geojson',
     geojsonFallback: 'https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_50m_admin_0_countries.geojson',
+    // UK split into England / Scotland / Wales / N. Ireland (Natural Earth 50m map units) — relative file in the repo.
+    ukUnitsUrl: 'uk_units.geojson',
     style: {
       base:     { color:'#cbd5e1', weight:0.5, fillColor:'#e5e7eb', fillOpacity:0.30 },
       selected: { color:'#b45309', weight:1.8, fillColor:'#f59e0b', fillOpacity:0.85 },
@@ -266,8 +268,8 @@
   };
 
   // FIFA 3-letter codes differ from ISO-3166 alpha-3 for several nations.
-  const FIFA2ISO3 = { RSA:'ZAF', SUI:'CHE', HAI:'HTI', SCO:'GBR', PAR:'PRY', GER:'DEU',
-                      NED:'NLD', KSA:'SAU', URU:'URY', ALG:'DZA', POR:'PRT', ENG:'GBR', CRO:'HRV' };
+  const FIFA2ISO3 = { RSA:'ZAF', SUI:'CHE', HAI:'HTI', SCO:'SCT', PAR:'PRY', GER:'DEU',
+                      NED:'NLD', KSA:'SAU', URU:'URY', ALG:'DZA', POR:'PRT', ENG:'ENG', CRO:'HRV' };
   const toIso3 = (fifa) => FIFA2ISO3[fifa] || fifa;
 
   // Map fill colour by geographic continent (from Natural Earth CONTINENT). ≤6 categories.
@@ -334,9 +336,9 @@
   // ===================================================================
   //  STATE
   // ===================================================================
-  let map, geoLayer, colourMode = 'continent', isLive = false, lastUpdated = null, selectedId = null, bkHi = null;
+  let map, geoLayer, ukLayer, colourMode = 'continent', isLive = false, lastUpdated = null, selectedId = null, bkHi = null;
   const teamsById = new Map();      // id -> team record
-  const teamsByIso3 = new Map();    // iso3 -> [team records] (GBR holds England + Scotland)
+  const teamsByIso3 = new Map();    // iso3 -> [team records] (England=ENG, Scotland=SCT home-nation polygons)
   const gamesByTeam = new Map();    // id -> [game]
   const layerByIso3 = new Map();    // iso3 -> leaflet layer
   const metaByIso3 = new Map();     // iso3 -> { continent, pop } from Natural Earth
@@ -506,22 +508,32 @@
     try { const r = await fetch(CONFIG.geojsonUrl); if (!r.ok) throw new Error('HTTP '+r.status); data = await r.json(); }
     catch (e) { console.warn('Primary GeoJSON failed, trying fallback…', e); data = await (await fetch(CONFIG.geojsonFallback)).json(); }
 
+    const eachBoundary = (f, layer) => {
+      const iso3 = getIso3(f);
+      if (!isQualified(iso3)) return;
+      layerByIso3.set(iso3, layer);
+      metaByIso3.set(iso3, { continent:(f.properties||{}).CONTINENT, pop:(f.properties||{}).POP_EST });
+      mainBoundsByIso3.set(iso3, mainlandBounds(f, layer.getBounds()));
+      layer.on('mouseover', () => { if (iso3!==selIso3()) layer.setStyle({ fillOpacity:0.82 }); });
+      layer.on('mouseout',  () => { if (iso3!==selIso3()) layer.setStyle(styleFor(f)); });
+      layer.on('click', () => { const recs = teamsByIso3.get(iso3); if (recs && recs[0]) selectTeam(recs[0].id); });
+    };
+
     geoLayer = L.geoJSON(data, {
       style: styleFor,
-      onEachFeature: (f, layer) => {
-        const iso3 = getIso3(f);
-        if (!isQualified(iso3)) return;
-        layerByIso3.set(iso3, layer);
-        metaByIso3.set(iso3, { continent:(f.properties||{}).CONTINENT, pop:(f.properties||{}).POP_EST });
-        mainBoundsByIso3.set(iso3, mainlandBounds(f, layer.getBounds()));
-        layer.on('mouseover', () => { if (iso3!==selIso3()) layer.setStyle({ fillOpacity:0.82 }); });
-        layer.on('mouseout',  () => { if (iso3!==selIso3()) layer.setStyle(styleFor(f)); });
-        layer.on('click', () => { const recs = teamsByIso3.get(iso3); if (recs && recs[0]) selectTeam(recs[0].id); });
-      },
+      filter: (f) => getIso3(f) !== 'GBR',          // UK drawn as 4 home-nation polygons instead
+      onEachFeature: eachBoundary,
     }).addTo(map);
+
+    // England, Scotland, Wales & Northern Ireland as separate polygons
+    try {
+      const uk = await (await fetch(CONFIG.ukUnitsUrl)).json();
+      ukLayer = L.geoJSON(uk, { style: styleFor, onEachFeature: eachBoundary }).addTo(map);
+    } catch (e) { console.warn('UK home-nation boundaries failed to load.', e); }
+
     restyleAll();   // metaByIso3 is now populated → apply continent colours
   }
-  function restyleAll() { if (geoLayer) geoLayer.setStyle(styleFor); }
+  function restyleAll() { if (geoLayer) geoLayer.setStyle(styleFor); if (ukLayer) ukLayer.setStyle(styleFor); }
 
   // ===================================================================
   //  SELECTION + DETAIL PANEL
