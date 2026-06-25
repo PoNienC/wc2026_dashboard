@@ -195,6 +195,9 @@
   body.view-bracket .leaflet-tile-pane{filter:grayscale(1) brightness(1.06) opacity(0.5);}
   body.view-bracket .map-note{display:none;}
   body.view-bracket .leaflet-control-zoom{display:none;}
+  /* Scorers view: the nation panel (left:10, width:320) covers the map's left edge,
+     so push the zoom control clear of it instead of letting it sit on the flag. */
+  body.view-scorers .leaflet-top.leaflet-left{left:340px;}
   .bk-title{font-size:18px;font-weight:700;margin:0 0 14px;letter-spacing:-.2px;
     text-shadow:0 1px 8px rgba(255,255,255,.95),0 0 2px rgba(255,255,255,.95);}
   /* Dark mode: the map behind is dark, so glow dark (not white) and brighten the hint. */
