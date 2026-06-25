@@ -2,3 +2,7 @@
 Screenshot*.png
 squad_leagues.gen.js
 .DS_Store
+
+# Python
+__pycache__/
+*.pyc
