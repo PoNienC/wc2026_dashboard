@@ -532,8 +532,9 @@
     // minZoom 2 + noWrap + maxBounds → one world only (no repeated/doubled continents).
     map = L.map('map', { minZoom:2, maxZoom:7, zoomControl:true,
                          maxBounds:[[-85,-180],[85,180]], maxBoundsViscosity:1.0 }).setView([20,0], 2);
-    baseTiles = L.tileLayer(tileUrl(), { attribution:'© OpenStreetMap, © CARTO', subdomains:'abcd',
-                 maxZoom:19, noWrap:true, bounds:[[-90,-180],[90,180]] }).addTo(map);
+    // Wrap on (no noWrap) so tiles fill the viewport edges instead of leaving ocean-blue
+    // gaps; minZoom 2 + maxBounds cap how much repeats (just a sliver of ground at the sides).
+    baseTiles = L.tileLayer(tileUrl(), { attribution:'© OpenStreetMap, © CARTO', subdomains:'abcd', maxZoom:19 }).addTo(map);
     L.control.scale({ imperial:false, position:'bottomright' }).addTo(map);
   }
   const autoTheme = () => {
