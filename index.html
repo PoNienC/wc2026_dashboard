@@ -195,8 +195,11 @@
   body.view-bracket .leaflet-tile-pane{filter:grayscale(1) brightness(1.06) opacity(0.5);}
   body.view-bracket .map-note{display:none;}
   body.view-bracket .leaflet-control-zoom{display:none;}
-  .bk-title{text-shadow:0 1px 8px rgba(255,255,255,.95),0 0 2px rgba(255,255,255,.95);}
-  .bk-title{font-size:18px;font-weight:700;margin:0 0 14px;letter-spacing:-.2px;}
+  .bk-title{font-size:18px;font-weight:700;margin:0 0 14px;letter-spacing:-.2px;
+    text-shadow:0 1px 8px rgba(255,255,255,.95),0 0 2px rgba(255,255,255,.95);}
+  /* Dark mode: the map behind is dark, so glow dark (not white) and brighten the hint. */
+  body.theme-dark .bk-title{text-shadow:0 1px 10px rgba(0,0,0,.92),0 0 3px rgba(0,0,0,.95);}
+  .bk-sub{font-weight:500;font-size:13px;color:var(--ink);opacity:.78;}
   .bracket{display:flex;align-items:stretch;gap:12px;min-width:1180px;min-height:740px;position:relative;}
   svg.bk-lines path{stroke:#d1d5db;}
   .bk-half{display:flex;gap:12px;flex:1;}
@@ -853,7 +856,7 @@
       <div class="bk-third"><div class="lab">Match for third place</div>${matchBox(BK_THIRD)}</div></div>`;
     document.getElementById('bracket-view').innerHTML =
       `<h2 class="bk-title">Knockout bracket
-        <span style="font-weight:500;color:var(--muted);font-size:13px">· bold = winner · click a team for the map · click ⚔ H2H for head-to-head</span></h2>
+        <span class="bk-sub">· bold = winner · click a team for the map · click ⚔ H2H for head-to-head</span></h2>
       <div class="bracket">${bkHalf('left',BK_LEFT)}${centre}${bkHalf('right',BK_RIGHT)}</div>`;
     drawConnectors();
   }
