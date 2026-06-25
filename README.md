@@ -22,6 +22,7 @@ An interactive, **single-file** web dashboard for the 2026 FIFA World Cup: a wor
 | Squad → club-league distribution | Parsed from [Wikipedia: 2026 FIFA World Cup squads](https://en.wikipedia.org/wiki/2026_FIFA_World_Cup_squads) (each player's club country) |
 | Basemap tiles | © OpenStreetMap, © CARTO (Positron) · Map library: [Leaflet](https://leafletjs.com) |
 | Flags | [flagcdn.com](https://flagcdn.com) |
+| Page-view counter | [Abacus](https://abacus.jasoncameron.dev) — free, anonymous hit counter (no personal data collected) |
 
 Because all data is fetched **client-side** from a CORS-open API, the page is fully static — "live updates" happen on every load (and via the 60 s auto-refresh), with no backend.
 

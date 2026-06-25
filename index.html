@@ -193,6 +193,7 @@
       <button data-mode="single">Qualified</button>
     </div>
     <div id="dataBadge" class="badge mock"><span class="dot"></span><span id="dataBadgeText">Loading…</span></div>
+    <div id="visits" class="badge" style="display:none" title="Total page views since launch"><span class="dot" style="background:#6366f1;box-shadow:0 0 0 3px rgba(99,102,241,.18)"></span><span id="visitsText"></span></div>
     <button class="btn" id="resetBtn" title="Reset the map to the world view">Reset</button>
     <button class="btn" id="refreshBtn" title="Reload live standings">Refresh</button>
   </header>
@@ -259,6 +260,8 @@
     geojsonFallback: 'https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_50m_admin_0_countries.geojson',
     // UK split into England / Scotland / Wales / N. Ireland (Natural Earth 50m map units) — relative file in the repo.
     ukUnitsUrl: 'uk_units.geojson',
+    // Free, no-signup, CORS-open page-view counter (Abacus). Set to null to disable.
+    visitorCounter: 'https://abacus.jasoncameron.dev/hit/ponienc-wc2026/views',
     style: {
       base:     { color:'#cbd5e1', weight:0.5, fillColor:'#e5e7eb', fillOpacity:0.30 },
       selected: { color:'#b45309', weight:1.8, fillColor:'#f59e0b', fillOpacity:0.85 },
@@ -791,6 +794,22 @@
         renderDetail(teamsById.get(selectedId));
       if (document.body.classList.contains('view-bracket')) buildBracket();
     }, 60000);
+
+    trackVisit();   // increment + show the live page-view count (once per load)
+  }
+
+  // Free page-view counter (Abacus) — fire-and-forget; the badge stays hidden if the service is unavailable.
+  async function trackVisit() {
+    if (!CONFIG.visitorCounter) return;
+    try {
+      const r = await fetch(CONFIG.visitorCounter, { cache:'no-store' });
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      const n = (await r.json()).value;
+      if (typeof n === 'number') {
+        document.getElementById('visitsText').textContent = n.toLocaleString('en-GB') + (n === 1 ? ' view' : ' views');
+        document.getElementById('visits').style.display = '';
+      }
+    } catch (e) { console.warn('Visit counter unavailable.', e); }
   }
   boot();
   </script>
