@@ -1,0 +1,62 @@
+name: Refresh FIFA data
+
+# Re-bakes the bracket-driven head-to-head (h2h.json) from FIFA's authoritative
+# endpoint. Runs daily, on manual dispatch, and once whenever this workflow file
+# changes (so it can be tested by pushing it). The FIFA ranking is NOT baked here —
+# api.fifa.com is CORS-open, so the app loads the ranking live in the browser.
+#
+# NOTE: the H2H source (inside.fifa.com) sits behind Akamai bot protection. It works
+# from a normal IP; if GitHub's runner IP gets challenged, the build step fails and
+# no commit is made — fall back to running scripts/build_h2h.py locally (see HANDOVER).
+
+on:
+  schedule:
+    - cron: '0 6 * * *'      # daily 06:00 UTC (scheduled runs only fire on the default branch)
+  workflow_dispatch: {}
+  push:
+    paths:
+      - '.github/workflows/refresh_fifa_data.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: refresh-fifa-data
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Bake bracket-driven head-to-head
+        run: python3 scripts/build_h2h.py
+
+      - name: Stamp refresh time
+        run: |
+          python3 - <<'PY'
+          import json, datetime, pathlib
+          h2h = pathlib.Path('h2h.json')
+          pairs = len(json.loads(h2h.read_text())) if h2h.exists() else 0
+          pathlib.Path('h2h.meta.json').write_text(
+              json.dumps({'refreshed': datetime.datetime.utcnow().isoformat(timespec='seconds') + 'Z',
+                          'pairs': pairs}, indent=2) + '\n')
+          print(f'stamped: {pairs} pair(s)')
+          PY
+
+      - name: Commit if changed
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add h2h.json h2h.meta.json
+          if git diff --cached --quiet; then
+            echo 'No change — nothing to commit.'
+          else
+            git commit -m 'chore: refresh FIFA head-to-head data [skip ci]'
+            git push
+          fi
