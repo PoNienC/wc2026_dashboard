@@ -213,6 +213,19 @@
   body.theme-dark.view-bracket .mbox{background:rgba(20,28,48,.5);}
   body.theme-dark.view-bracket .mdate{background:rgba(14,22,40,.45);}
   body.theme-dark.view-bracket .bk-final-box .mdate{background:rgba(42,33,18,.6);color:#fcd9a8;}
+  /* Clickable match header → head-to-head */
+  .mdate.has-h2h{cursor:pointer;}
+  .mdate.has-h2h:hover{color:var(--selected);}
+  .mdate .h2h-hint{float:right;font-weight:700;letter-spacing:.02em;opacity:.8;}
+  #h2h{display:none;position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:800;width:min(440px,92vw);
+       background:var(--panel);border:1px solid var(--line);border-radius:14px;box-shadow:0 18px 60px rgba(0,0,0,.45);padding:18px 20px 20px;}
+  #h2h.open{display:block;}
+  #h2h .x{position:absolute;top:8px;right:12px;border:0;background:transparent;color:var(--muted);font-size:22px;cursor:pointer;line-height:1;}
+  .h2h-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:12px;}
+  .h2h-teams{display:flex;align-items:center;justify-content:center;gap:10px;font-size:15px;font-weight:700;margin-bottom:14px;flex-wrap:wrap;text-align:center;}
+  .h2h-teams img{width:30px;height:21px;border-radius:3px;box-shadow:0 0 0 1px rgba(0,0,0,.12);}
+  .h2h-teams .vs{color:var(--muted);font-weight:600;font-size:12px;}
+  .h2h-fact{font-size:14px;line-height:1.55;color:var(--ink);}
   .mdate{font-size:9px;color:var(--muted);padding:3px 8px;border-bottom:1px solid var(--line);background:#fafafa;}
   .mteam{display:flex;align-items:center;gap:7px;padding:7px 9px;font-size:12px;}
   .mteam+.mteam{border-top:1px solid #f1f2f4;}
@@ -303,6 +316,7 @@
     </div>
 
     <div id="bracket-view" aria-label="Knockout bracket"></div>
+    <div id="h2h" aria-live="polite"></div>
   </main>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
@@ -345,6 +359,28 @@
                               'Africa':'#ea580c', 'Asia':'#7c3aed', 'Oceania':'#0891b2' };
 
   // One fun fact per nation (keyed by FIFA code), shown in the detail panel on zoom-in.
+  // Head-to-head historic facts for knockout matchups, keyed by sorted FIFA codes.
+  // Curated + expandable (no free keyless H2H API). Add pairs as matchups resolve, or
+  // wire a paid H2H source (e.g. API-Football) into getH2H().
+  const H2H_FACTS = {
+    'CAN|RSA': "South Africa and Canada have barely crossed paths — a knockout meeting would be uncharted territory for both.",
+    'ARG|BRA': "The Superclásico de las Américas — yet, remarkably, Argentina have never beaten Brazil at a World Cup finals.",
+    'ARG|ENG': "Forever 1986: Maradona's 'Hand of God' and 'Goal of the Century' in one quarter-final — then England's 1998 last-16 heartbreak on penalties.",
+    'ARG|FRA': "The 2022 final — a 3–3 instant classic, Argentina crowned champions on penalties.",
+    'ARG|MEX': "Argentina have repeatedly ended Mexico's campaigns — beating them in 2006, 2010 and again in 2022.",
+    'ARG|NED': "Three World Cup classics — the 1978 final, plus dramatic penalty wins for Argentina in 2014 and a fiery 2022.",
+    'BRA|GER': "The Mineirazo — Germany's stunning 7–1 demolition of hosts Brazil in the 2014 semi-final.",
+    'BRA|CRO': "Brazil edged Croatia on penalties in a breathless 2022 quarter-final.",
+    'BRA|FRA': "Zidane's 2006 masterclass knocked Brazil out, echoing France's 3–0 win in the 1998 final.",
+    'ENG|FRA': "France ended England's 2022 hopes in the quarter-finals — Harry Kane's late penalty flying over.",
+    'ENG|GER': "A storied rivalry — 1966's final triumph for England, then German heartbreak in 1990 and a 4–1 rout in 2010.",
+    'ESP|GER': "Spain edged Germany 1–0 in the 2010 semi-final on the way to their first world title.",
+    'ESP|NED': "The 2010 final (Spain's first crown) and the Netherlands' emphatic 5–1 revenge in 2014.",
+    'ESP|POR': "Iberian neighbours who served up a 3–3 classic in the 2018 group stage, lit by a Ronaldo hat-trick.",
+    'MEX|USA': "CONCACAF's fiercest rivalry — yet the two have never actually met at a World Cup.",
+  };
+  const h2hKey = (a, b) => [a, b].sort().join('|');
+
   const FUN_FACTS = {
     MEX:"Hosting a record third World Cup (1970, 1986, 2026) — yet never past the quarter-finals.",
     RSA:"First African nation to host the World Cup (2010) — and the only host ever knocked out in the group stage.",
@@ -773,7 +809,9 @@
     const g = gamesById.get(String(id)); const [fh,fa] = FEEDERS[id] || ['',''];
     const fin = g ? g.finished : false; const hs = g?g.hs:'', as = g?g.as:'';
     const date = g ? dateLabel(g.date) : '';
-    return `<div class="mbox ${fin?'fin':''}" data-mid="${id}"><div class="mdate">M${id}${date?' · '+date:''}</div>
+    const both = g && teamsById.has(String(g.homeId)) && teamsById.has(String(g.awayId));  // both teams placed → head-to-head
+    return `<div class="mbox ${fin?'fin':''}" data-mid="${id}">
+      <div class="mdate${both?' has-h2h':''}"${both?` data-h2h="${id}"`:''}>M${id}${date?' · '+date:''}${both?'<span class="h2h-hint">⚔ H2H</span>':''}</div>
       ${bkSlot(g&&g.homeId, fh, hs, fin&&hs>as, fin)}
       ${bkSlot(g&&g.awayId, fa, as, fin&&as>hs, fin)}</div>`;
   }
@@ -787,7 +825,7 @@
       <div class="bk-third"><div class="lab">Match for third place</div>${matchBox(BK_THIRD)}</div></div>`;
     document.getElementById('bracket-view').innerHTML =
       `<h2 class="bk-title">Knockout bracket
-        <span style="font-weight:500;color:var(--muted);font-size:13px">· bold = winner · click a placed team to view it on the map</span></h2>
+        <span style="font-weight:500;color:var(--muted);font-size:13px">· bold = winner · click a team for the map · click ⚔ H2H for head-to-head</span></h2>
       <div class="bracket">${bkHalf('left',BK_LEFT)}${centre}${bkHalf('right',BK_RIGHT)}</div>`;
     drawConnectors();
   }
@@ -907,6 +945,7 @@
     document.body.classList.toggle('view-bracket', v==='bracket');
     document.body.classList.toggle('view-scorers', v==='scorers');
     document.getElementById('colourSeg').style.display = v==='map' ? '' : 'none';
+    closeH2H();
     if (v==='bracket') {
       buildBracket();
       if (map) { map.invalidateSize(); map.setView([20,0], 2, { animate:false }); }
@@ -929,6 +968,25 @@
     document.querySelectorAll('#bracket-view .mteam.bkactive').forEach(e => e.classList.remove('bkactive'));
     document.querySelectorAll('#bracket-view .mteam.pick[data-team="'+id+'"]').forEach(e => e.classList.add('bkactive'));
   }
+
+  // Head-to-head card for a knockout match where both nations are placed.
+  function getH2H(a, b) {
+    return H2H_FACTS[h2hKey(a, b)] || null;
+  }
+  function showH2H(homeId, awayId) {
+    const a = teamsById.get(String(homeId)), b = teamsById.get(String(awayId));
+    if (!a || !b) return;
+    const fact = getH2H(a.fifa, b.fifa)
+      || `No notable World Cup head-to-head between ${a.name} and ${b.name} on record yet — a fresh knockout encounter.`;
+    document.getElementById('h2h').innerHTML =
+      `<button class="x" aria-label="Close">×</button>
+       <div class="h2h-title">⚔ Head-to-head</div>
+       <div class="h2h-teams"><img src="${a.flag}" alt=""><span>${a.name}</span>
+         <span class="vs">vs</span><span>${b.name}</span><img src="${b.flag}" alt=""></div>
+       <div class="h2h-fact">${fact}</div>`;
+    document.getElementById('h2h').classList.add('open');
+  }
+  function closeH2H() { const el = document.getElementById('h2h'); if (el) el.classList.remove('open'); }
 
   async function boot() {
     isDark = autoTheme();
@@ -961,9 +1019,13 @@
       const b = e.target.closest('button'); if (!b) return; setView(b.dataset.view);
     });
     document.getElementById('bracket-view').addEventListener('click', e => {
-      const el = e.target.closest('.mteam.pick'); if (!el) return;
-      highlightNation(el.dataset.team);
+      const md = e.target.closest('.mdate.has-h2h');
+      if (md) { const g = gamesById.get(md.dataset.h2h); if (g) showH2H(g.homeId, g.awayId); return; }
+      const el = e.target.closest('.mteam.pick');
+      if (el) { highlightNation(el.dataset.team); closeH2H(); return; }
+      closeH2H();   // clicking the bracket backdrop dismisses the card
     });
+    document.getElementById('h2h').addEventListener('click', e => { if (e.target.closest('.x')) closeH2H(); });
     const board = document.getElementById('scorer-board');
     board.addEventListener('click', e => { const el = e.target.closest('.lb-row'); if (el) selectScorerNation(el.dataset.team); });
     board.addEventListener('keydown', e => { const el = e.target.closest('.lb-row'); if (el && (e.key==='Enter'||e.key===' ')) { e.preventDefault(); selectScorerNation(el.dataset.team); } });
