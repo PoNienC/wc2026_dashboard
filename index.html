@@ -20,6 +20,31 @@
     --selected:#f59e0b; --win:#22c55e; --draw:#9ca3af; --loss:#ef4444; --confirmed:#16a34a;
     --shadow:0 1px 3px rgba(0,0,0,.08),0 1px 2px rgba(0,0,0,.04);
   }
+  /* Dark mode — auto by the viewer's local clock; CARTO Dark Matter basemap */
+  body.theme-dark{
+    --bg:#0b1220; --panel:#161f33; --ink:#e6edf6; --muted:#94a3b8; --line:#2a3650;
+    --shadow:0 2px 10px rgba(0,0,0,.5);
+  }
+  body.theme-dark #map{background:#0a1626;}
+  body.theme-dark .group h2, body.theme-dark .mdate{background:#111a2c;}
+  body.theme-dark .team{border-bottom-color:#1e2840;}
+  body.theme-dark .team:hover, body.theme-dark .mteam.pick:hover, body.theme-dark .lb-row:hover{background:#1a2438;}
+  body.theme-dark .team.active, body.theme-dark .mteam.bkactive, body.theme-dark .lb-row.on{background:#2a2413;}
+  body.theme-dark .team .num{color:#aeb9cb;}
+  body.theme-dark .search, body.theme-dark .badge, body.theme-dark button.btn, body.theme-dark .seg button{background:#0f1830;color:var(--ink);}
+  body.theme-dark button.btn:hover{background:#15203a;}
+  body.theme-dark .seg button.on{background:#21305a;color:#c7d2fe;}
+  body.theme-dark .map-note{background:rgba(16,24,42,.92);}
+  body.theme-dark .pill{background:#1e2840;color:#c7d2e0;}
+  body.theme-dark .funfact{background:#1a1733;border-color:#2f2a4d;color:#d6d0ee;}
+  body.theme-dark .bar-track, body.theme-dark .lb-bar{background:#26324c;}
+  body.theme-dark .mteam+.mteam{border-top-color:#1e2840;}
+  body.theme-dark .tag{background:#1e2840;color:#aeb9cb;}
+  body.theme-dark .empty{background:#0f1830;border-color:#2a3650;}
+  body.theme-dark .d-head .x{background:#1e2840;color:var(--muted);}
+  body.theme-dark .leaflet-bar a{background:#161f33;color:#e6edf6;border-color:#2a3650;}
+  body.theme-dark.view-bracket .leaflet-tile-pane{filter:grayscale(0.85) opacity(0.5);}
+
   *{box-sizing:border-box;}
   html,body{height:100%;margin:0;}
   body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
@@ -220,6 +245,7 @@
     </div>
     <div id="dataBadge" class="badge mock"><span class="dot"></span><span id="dataBadgeText">Loading…</span></div>
     <div id="visits" class="badge" style="display:none" title="Total page views since launch"><span class="dot" style="background:#6366f1;box-shadow:0 0 0 3px rgba(99,102,241,.18)"></span><span id="visitsText"></span></div>
+    <button class="btn" id="themeBtn" title="Toggle light / dark mode">🌙</button>
     <button class="btn" id="resetBtn" title="Reset the map to the world view">Reset</button>
     <button class="btn" id="refreshBtn" title="Reload live standings">Refresh</button>
   </header>
@@ -291,8 +317,11 @@
     ukUnitsUrl: 'uk_units.geojson',
     // Free, no-signup, CORS-open page-view counter (Abacus). Set to null to disable.
     visitorCounter: 'https://abacus.jasoncameron.dev/hit/ponienc-wc2026/views',
+    tilesLight: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
+    tilesDark:  'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
     style: {
       base:     { color:'#cbd5e1', weight:0.5, fillColor:'#e5e7eb', fillOpacity:0.30 },
+      baseDark: { color:'#334155', weight:0.4, fillColor:'#1e293b', fillOpacity:0.25 },
       selected: { color:'#b45309', weight:1.8, fillColor:'#f59e0b', fillOpacity:0.85 },
       single:   '#16a34a',
       muted:    { color:'#cbd5e1', weight:0.5, fillColor:'#94a3b8', fillOpacity:0.30 },
@@ -368,7 +397,7 @@
   // ===================================================================
   //  STATE
   // ===================================================================
-  let map, geoLayer, ukLayer, colourMode = 'continent', isLive = false, lastUpdated = null, selectedId = null, bkHi = null;
+  let map, geoLayer, ukLayer, baseTiles, isDark = false, colourMode = 'continent', isLive = false, lastUpdated = null, selectedId = null, bkHi = null;
   const teamsById = new Map();      // id -> team record
   let topScorers = [];              // global Golden Boot leaderboard [{name,goals,teamId}]
   const scorersByTeam = new Map();  // teamId -> [{name,goals}] sorted desc
@@ -497,11 +526,27 @@
   // ===================================================================
   //  MAP
   // ===================================================================
+  const tileUrl = () => isDark ? CONFIG.tilesDark : CONFIG.tilesLight;
+  const baseStyle = () => isDark ? CONFIG.style.baseDark : CONFIG.style.base;
   function initMap() {
-    map = L.map('map', { worldCopyJump:true, minZoom:1, maxZoom:7, zoomControl:true }).setView([18,-35], 2.4);
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
-      { attribution:'© OpenStreetMap, © CARTO', subdomains:'abcd', maxZoom:19 }).addTo(map);
+    // minZoom 2 + noWrap + maxBounds → one world only (no repeated/doubled continents).
+    map = L.map('map', { minZoom:2, maxZoom:7, zoomControl:true,
+                         maxBounds:[[-85,-180],[85,180]], maxBoundsViscosity:1.0 }).setView([20,0], 2);
+    baseTiles = L.tileLayer(tileUrl(), { attribution:'© OpenStreetMap, © CARTO', subdomains:'abcd',
+                 maxZoom:19, noWrap:true, bounds:[[-90,-180],[90,180]] }).addTo(map);
     L.control.scale({ imperial:false, position:'bottomright' }).addTo(map);
+  }
+  const autoTheme = () => {
+    try { const s = localStorage.getItem('wc-theme'); if (s) return s === 'dark'; } catch (e) {}
+    const h = new Date().getHours(); return h < 7 || h >= 19;   // dark 19:00–07:00, in the viewer's local time
+  };
+  function applyTheme(dark, persist) {
+    isDark = dark;
+    document.body.classList.toggle('theme-dark', dark);
+    if (baseTiles) baseTiles.setUrl(tileUrl());
+    const b = document.getElementById('themeBtn'); if (b) b.textContent = dark ? '☀️' : '🌙';
+    if (persist) { try { localStorage.setItem('wc-theme', dark ? 'dark' : 'light'); } catch (e) {} }
+    restyleAll();
   }
   function getIso3(f) { const p=f.properties||{};
     if (p.ADM0_A3 && p.ADM0_A3!=='-99') return p.ADM0_A3;
@@ -518,10 +563,10 @@
     const iso3 = getIso3(f);
     if (document.body.classList.contains('view-bracket')) {       // greyed backdrop; only the picked nation pops
       if (iso3===bkHi) return CONFIG.style.selected;
-      return isQualified(iso3) ? CONFIG.style.muted : CONFIG.style.base;
+      return isQualified(iso3) ? CONFIG.style.muted : baseStyle();
     }
     if (iso3===selIso3()) return CONFIG.style.selected;
-    if (!isQualified(iso3)) return CONFIG.style.base;
+    if (!isQualified(iso3)) return baseStyle();
     return { color:'#ffffff', weight:0.8, fillColor:fillFor(iso3), fillOpacity:0.62 };
   }
   const selIso3 = () => { const r = teamsById.get(selectedId); return r ? r.iso3 : null; };
@@ -878,6 +923,8 @@
   }
 
   async function boot() {
+    isDark = autoTheme();
+    document.body.classList.toggle('theme-dark', isDark);
     initMap();
     document.getElementById('mapNote').textContent = 'Loading live data…';
     await loadData();
@@ -887,6 +934,9 @@
 
     document.getElementById('search').addEventListener('input', e => filterSidebar(e.target.value));
     document.getElementById('resetBtn').addEventListener('click', resetView);
+    const tb = document.getElementById('themeBtn');
+    tb.textContent = isDark ? '☀️' : '🌙';
+    tb.addEventListener('click', () => applyTheme(!isDark, true));
     document.getElementById('dClose').addEventListener('click', closeDetail);
     document.getElementById('refreshBtn').addEventListener('click', async () => {
       await loadData(); updateBadge(); renderSidebar(); restyleAll();
