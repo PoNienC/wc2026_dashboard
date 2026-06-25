@@ -136,6 +136,31 @@
            border-left:3px solid #7c3aed;border-radius:8px;padding:8px 10px 8px 12px;margin:-2px 0 14px;}
   .funfact::before{content:"⚽ ";}
 
+  /* Scorers view */
+  #scorer-board, #scorer-nation{display:none;position:absolute;top:10px;bottom:10px;z-index:600;background:var(--panel);
+    border:1px solid var(--line);border-radius:12px;box-shadow:0 8px 28px rgba(0,0,0,.16);overflow:auto;}
+  #scorer-board{right:10px;width:312px;} #scorer-nation{left:10px;width:320px;}
+  body.view-scorers #sidebar, body.view-scorers #detail{display:none;}
+  body.view-scorers #scorer-board{display:block;}
+  body.view-scorers #scorer-nation.open{display:block;}
+  .sp-title{font-size:15px;font-weight:700;padding:14px 14px 2px;}
+  .sp-sub{font-size:11px;color:var(--muted);padding:0 14px 10px;border-bottom:1px solid var(--line);}
+  .sp-head{display:flex;align-items:center;gap:10px;padding:14px;border-bottom:1px solid var(--line);}
+  .sp-head img{width:34px;height:24px;border-radius:3px;box-shadow:0 0 0 1px rgba(0,0,0,.1);}
+  .sp-head .dn{font-size:16px;font-weight:700;line-height:1.15;} .sp-head .dg{font-size:12px;color:var(--muted);}
+  .lb{padding:6px 0 10px;}
+  .lb-row{display:grid;grid-template-columns:20px 22px 1fr 58px 22px;gap:8px;align-items:center;padding:7px 12px;cursor:pointer;border-left:3px solid transparent;}
+  .lb-row:hover{background:#f7faf8;}
+  .lb-row.on{background:#fff7ec;border-left-color:var(--selected);}
+  .lb-row:focus-visible{outline:2px solid #93c5fd;outline-offset:-2px;}
+  .lb-rank{font-size:12px;color:var(--muted);text-align:center;font-variant-numeric:tabular-nums;}
+  .lb-flag{width:22px;height:15px;border-radius:2px;object-fit:cover;box-shadow:0 0 0 1px rgba(0,0,0,.08);}
+  .lb-name{font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .lb-name .lb-nat{display:block;font-size:10px;font-weight:500;color:var(--muted);}
+  .lb-bar{background:#f1f2f4;border-radius:5px;height:10px;overflow:hidden;}
+  .lb-fill{display:block;height:100%;border-radius:5px;background:var(--selected);}
+  .lb-goals{font-size:13px;font-weight:700;text-align:right;font-variant-numeric:tabular-nums;}
+
   /* Bracket view */
   #bracket-view{display:none;position:absolute;inset:0;z-index:500;overflow:auto;background:transparent;padding:16px 20px 30px;}
   body.view-bracket #sidebar{display:none;}
@@ -187,6 +212,7 @@
     <div class="seg" id="viewSeg" title="Switch view">
       <button data-view="map" class="on">Map</button>
       <button data-view="bracket">Bracket</button>
+      <button data-view="scorers">Scorers</button>
     </div>
     <div class="seg" id="colourSeg" title="Map colour mode">
       <button data-mode="continent" class="on">By continent</button>
@@ -238,6 +264,9 @@
         </div>
         <div class="d-foot" id="dFoot"></div>
       </section>
+
+      <aside id="scorer-board" aria-label="Goal leaderboard"></aside>
+      <aside id="scorer-nation" aria-label="Nation top scorers"></aside>
     </div>
 
     <div id="bracket-view" aria-label="Knockout bracket"></div>
@@ -341,6 +370,8 @@
   // ===================================================================
   let map, geoLayer, ukLayer, colourMode = 'continent', isLive = false, lastUpdated = null, selectedId = null, bkHi = null;
   const teamsById = new Map();      // id -> team record
+  let topScorers = [];              // global Golden Boot leaderboard [{name,goals,teamId}]
+  const scorersByTeam = new Map();  // teamId -> [{name,goals}] sorted desc
   const teamsByIso3 = new Map();    // iso3 -> [team records] (England=ENG, Scotland=SCT home-nation polygons)
   const gamesByTeam = new Map();    // id -> [game]
   const layerByIso3 = new Map();    // iso3 -> leaflet layer
@@ -406,6 +437,7 @@
       });
     }
     groupsOrdered = Object.keys(byName).sort().map(n => [n, byName[n]]);
+    parseScorers(games);
   }
 
   function teamForm(id) {
@@ -519,7 +551,11 @@
       mainBoundsByIso3.set(iso3, mainlandBounds(f, layer.getBounds()));
       layer.on('mouseover', () => { if (iso3!==selIso3()) layer.setStyle({ fillOpacity:0.82 }); });
       layer.on('mouseout',  () => { if (iso3!==selIso3()) layer.setStyle(styleFor(f)); });
-      layer.on('click', () => { const recs = teamsByIso3.get(iso3); if (recs && recs[0]) selectTeam(recs[0].id); });
+      layer.on('click', () => {
+        const recs = teamsByIso3.get(iso3); if (!recs || !recs[0]) return;
+        if (document.body.classList.contains('view-scorers')) selectScorerNation(recs[0].id);
+        else if (!document.body.classList.contains('view-bracket')) selectTeam(recs[0].id);
+      });
     };
 
     geoLayer = L.geoJSON(data, {
@@ -731,17 +767,103 @@
     wrap.insertBefore(svg, wrap.firstChild);
   }
 
+  // ===================================================================
+  //  GOAL SCORERS — parsed from the scorer fields in /games
+  // ===================================================================
+  function parseScorers(games) {
+    topScorers = []; scorersByTeam.clear();
+    const cleanName = (e) => e.split(/\s*\d/)[0].trim();                 // name = text before the first digit (minute)
+    const parseList = (s) => (!s || String(s).toLowerCase()==='null') ? []
+      : (String(s).match(/"([^"]*)"/g) || []).map(x => x.slice(1, -1));
+    const byTeam = new Map();                                           // teamId -> Map(surname|team -> {name,goals})
+    for (const g of (games || [])) {
+      if (String(g.finished).toUpperCase() !== 'TRUE') continue;
+      for (const [side, tid] of [['home_scorers', String(g.home_team_id)], ['away_scorers', String(g.away_team_id)]]) {
+        for (const e of parseList(g[side])) {
+          if (/\(og\)/i.test(e)) continue;                              // own goals aren't credited to the scorer
+          const name = cleanName(e); if (!name) continue;
+          const key = name.split(/\s+/).pop().toLowerCase() + '|' + tid; // aggregate by surname + team
+          if (!byTeam.has(tid)) byTeam.set(tid, new Map());
+          const m = byTeam.get(tid), cur = m.get(key) || { name, goals:0 };
+          cur.goals++; if (name.length > cur.name.length) cur.name = name; // keep the fullest spelling seen
+          m.set(key, cur);
+        }
+      }
+    }
+    for (const [tid, m] of byTeam) {
+      const arr = [...m.values()].sort((a,b)=>b.goals-a.goals);
+      scorersByTeam.set(tid, arr);
+      for (const p of arr) topScorers.push({ name:p.name, goals:p.goals, teamId:tid });
+    }
+    topScorers.sort((a,b) => b.goals-a.goals || a.name.localeCompare(b.name));
+  }
+
+  const continentColourOf = (iso3) => {
+    const m = metaByIso3.get(iso3);
+    return (m && CONTINENT_COLOURS[m.continent]) ? CONTINENT_COLOURS[m.continent] : CONFIG.style.single;
+  };
+
+  function buildLeaderboard() {
+    const top = topScorers.slice(0, 25), max = top.length ? top[0].goals : 1;
+    document.getElementById('scorer-board').innerHTML = `<div class="sp-title">⚽ Golden Boot race</div>
+      <div class="sp-sub">Top scorers · live from match data · click a player</div>
+      <div class="lb">` + (top.length ? top.map((p,i) => {
+        const t = teamsById.get(String(p.teamId)) || {};
+        return `<div class="lb-row" data-team="${p.teamId}" role="button" tabindex="0" title="${t.name||''}">
+          <span class="lb-rank">${i+1}</span><img class="lb-flag" src="${t.flag||''}" alt="" loading="lazy">
+          <span class="lb-name">${p.name}<span class="lb-nat">${t.name||''}</span></span>
+          <span class="lb-bar"><span class="lb-fill" style="width:${Math.round(p.goals/max*100)}%"></span></span>
+          <span class="lb-goals">${p.goals}</span></div>`;
+      }).join('') : `<div class="empty" style="margin:12px">No goals recorded yet.</div>`) + `</div>`;
+  }
+
+  function renderNationScorers(id) {
+    const rec = teamsById.get(String(id)); if (!rec) return;
+    const arr = scorersByTeam.get(String(id)) || [], max = arr.length ? arr[0].goals : 1;
+    const col = continentColourOf(rec.iso3), total = arr.reduce((s,p)=>s+p.goals,0);
+    const el = document.getElementById('scorer-nation');
+    el.innerHTML = `<div class="sp-head"><img src="${rec.flag}" alt="">
+        <div><div class="dn">${rec.name}</div><div class="dg">Goalscorers · ${total} goal${total===1?'':'s'}</div></div></div>`
+      + (arr.length ? `<div class="bars" style="padding:12px 14px 16px">` + arr.map(p => `
+          <div class="bar-row"><span class="bar-lab" title="${p.name}">${p.name}</span>
+          <span class="bar-track"><span class="bar-fill" style="width:${Math.round(p.goals/max*100)}%;background:${col}"></span></span>
+          <span class="bar-n">${p.goals}</span></div>`).join('') + `</div>`
+        : `<div class="empty" style="margin:14px">No goals yet for ${rec.name}.</div>`);
+    el.classList.add('open');
+  }
+
+  function selectScorerNation(id) {
+    const rec = teamsById.get(String(id)); if (!rec) return;
+    const prevIso = selIso3(); selectedId = id;
+    if (prevIso && prevIso!==rec.iso3 && layerByIso3.has(prevIso)) layerByIso3.get(prevIso).setStyle(styleFor({ properties:{ ADM0_A3:prevIso } }));
+    const layer = layerByIso3.get(rec.iso3);
+    if (layer) {
+      layer.setStyle(CONFIG.style.selected); layer.bringToFront();
+      const w = map.getSize().x, reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      const lp = Math.round(Math.min(330, Math.max(20, w*0.30))), rp = Math.round(Math.min(310, Math.max(20, w*0.28)));
+      map.flyToBounds(mainBoundsByIso3.get(rec.iso3) || layer.getBounds(),
+        { paddingTopLeft:[lp,28], paddingBottomRight:[rp,28], maxZoom:6, duration:1.0, animate:!reduce });
+    }
+    document.querySelectorAll('#scorer-board .lb-row.on').forEach(e => e.classList.remove('on'));
+    document.querySelectorAll(`#scorer-board .lb-row[data-team="${id}"]`).forEach(e => e.classList.add('on'));
+    renderNationScorers(id);
+  }
+
   function setView(v) {
     document.querySelectorAll('#viewSeg button').forEach(x => x.classList.toggle('on', x.dataset.view===v));
     document.body.classList.toggle('view-bracket', v==='bracket');
-    document.getElementById('colourSeg').style.display = v==='bracket' ? 'none' : '';
+    document.body.classList.toggle('view-scorers', v==='scorers');
+    document.getElementById('colourSeg').style.display = v==='map' ? '' : 'none';
     if (v==='bracket') {
       buildBracket();
       if (map) { map.invalidateSize(); map.setView([20,0], 2, { animate:false }); }
+    } else if (v==='scorers') {
+      buildLeaderboard();
+      if (map) { map.invalidateSize(); map.setView([25,0], 2, { animate:false }); }
     } else if (map) {
       map.invalidateSize();
     }
-    restyleAll();   // muted-grey backdrop in bracket view; continent colours in map view
+    restyleAll();   // muted-grey backdrop in bracket view; continent colours elsewhere
   }
 
   // Bracket click: highlight the nation on the backdrop map, no zoom, stay in the bracket.
@@ -784,6 +906,9 @@
       const el = e.target.closest('.mteam.pick'); if (!el) return;
       highlightNation(el.dataset.team);
     });
+    const board = document.getElementById('scorer-board');
+    board.addEventListener('click', e => { const el = e.target.closest('.lb-row'); if (el) selectScorerNation(el.dataset.team); });
+    board.addEventListener('keydown', e => { const el = e.target.closest('.lb-row'); if (el && (e.key==='Enter'||e.key===' ')) { e.preventDefault(); selectScorerNation(el.dataset.team); } });
     window.addEventListener('resize', () => { if (document.body.classList.contains('view-bracket')) drawConnectors(); });
 
     // Live auto-refresh: re-pull standings / fixtures / bracket every 60s, preserving the current view.
@@ -793,6 +918,10 @@
       if (selectedId && teamsById.has(selectedId) && document.getElementById('detail').classList.contains('open'))
         renderDetail(teamsById.get(selectedId));
       if (document.body.classList.contains('view-bracket')) buildBracket();
+      if (document.body.classList.contains('view-scorers')) {
+        buildLeaderboard();
+        if (selectedId && document.getElementById('scorer-nation').classList.contains('open')) renderNationScorers(selectedId);
+      }
     }, 60000);
 
     trackVisit();   // increment + show the live page-view count (once per load)
