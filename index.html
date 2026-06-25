@@ -226,6 +226,26 @@
   .h2h-teams img{width:30px;height:21px;border-radius:3px;box-shadow:0 0 0 1px rgba(0,0,0,.12);}
   .h2h-teams .vs{color:var(--muted);font-weight:600;font-size:12px;}
   .h2h-fact{font-size:14px;line-height:1.55;color:var(--ink);}
+  /* FIFA head-to-head record (pre-baked) + FIFA ranking chips */
+  .h2h-rk{font-size:11px;font-weight:700;color:var(--selected);vertical-align:middle;}
+  .team .rk{font-size:9.5px;font-weight:700;color:var(--muted);margin-left:4px;vertical-align:middle;}
+  .h2h-live{margin-top:13px;}
+  .h2h-loading{font-size:13px;color:var(--muted);}
+  .h2h-rec{font-size:13.5px;line-height:1.5;color:var(--ink);}
+  .h2h-rec.muted{color:var(--muted);font-size:13px;}
+  .h2h-tot{margin-bottom:8px;color:var(--muted);}
+  .h2h-tot b{color:var(--ink);font-weight:700;}
+  .h2h-wdl{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:9px;
+    padding:8px 11px;border-radius:9px;background:rgba(148,163,184,.16);font-weight:700;}
+  .h2h-wdl .nm{font-size:12.5px;}
+  .h2h-wdl .n{font-size:16px;}
+  .h2h-wdl .d{font-size:11.5px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.04em;}
+  .h2h-row{display:flex;gap:9px;margin-bottom:5px;}
+  .h2h-row .k{color:var(--muted);min-width:74px;flex:0 0 auto;font-size:11px;
+    text-transform:uppercase;letter-spacing:.05em;padding-top:2px;}
+  .h2h-row b{color:var(--ink);}
+  .h2h-pen{color:var(--selected);font-weight:600;white-space:nowrap;}
+  .h2h-src{margin-top:11px;font-size:10.5px;color:var(--muted);opacity:.8;line-height:1.4;}
   .mdate{font-size:9px;color:var(--muted);padding:3px 8px;border-bottom:1px solid var(--line);background:#fafafa;}
   .mteam{display:flex;align-items:center;gap:7px;padding:7px 9px;font-size:12px;}
   .mteam+.mteam{border-top:1px solid #f1f2f4;}
@@ -338,6 +358,13 @@
     ukUnitsUrl: 'uk_units.geojson',
     // Free, no-signup, CORS-open page-view counter (Abacus). Set to null to disable.
     visitorCounter: 'https://abacus.jasoncameron.dev/hit/ponienc-wc2026/views',
+    // Pre-baked head-to-head, keyed by sorted FIFA codes. Bracket-driven and refreshed
+    // daily (scripts/build_h2h.py + the GitHub Action). FIFA's complete H2H sits behind a
+    // bot-walled, non-CORS endpoint, so we bake it server-side and serve this file.
+    h2hData: 'h2h.json',
+    // FIFA/Coca-Cola World Ranking — api.fifa.com IS CORS-open, so the ranking loads live.
+    fifaApi: 'https://api.fifa.com/api/v3',
+    rankTtlMs: 24 * 60 * 60 * 1000,   // ranking changes ~monthly — cache a day in localStorage
     tilesLight: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
     tilesDark:  'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
     style: {
@@ -360,8 +387,8 @@
 
   // One fun fact per nation (keyed by FIFA code), shown in the detail panel on zoom-in.
   // Head-to-head historic facts for knockout matchups, keyed by sorted FIFA codes.
-  // Curated + expandable (no free keyless H2H API). Add pairs as matchups resolve, or
-  // wire a paid H2H source (e.g. API-Football) into getH2H().
+  // These are the curated narrative HEADLINE shown above the live, computed FIFA record
+  // (see fetchFifaH2H). Optional per pairing — add more as marquee matchups resolve.
   const H2H_FACTS = {
     'CAN|RSA': "South Africa and Canada have barely crossed paths — a knockout meeting would be uncharted territory for both.",
     'ARG|BRA': "The Superclásico de las Américas — yet, remarkably, Argentina have never beaten Brazil at a World Cup finals.",
@@ -541,7 +568,7 @@
                data-search="${(r.name+' group '+g).toLowerCase()}" aria-label="${r.name}, Group ${g}">
             <span class="pos">${i+1}</span>
             <img class="flag" loading="lazy" src="${r.flag}" alt="" />
-            <span class="name">${r.name}</span>
+            <span class="name">${r.name}${r.fifa && rankOf(r.fifa) ? ` <span class="rk">#${rankOf(r.fifa)}</span>` : ''}</span>
             <span class="num">${r.mp}</span>
             <span class="num">${sign(r.gd)}</span>
             <span class="num pts">${r.pts}</span>
@@ -701,7 +728,8 @@
     document.getElementById('dName').textContent = rec.name;
     const meta = metaByIso3.get(rec.iso3) || {};
     const popTxt = meta.pop ? ' · Pop ' + fmtPop(meta.pop) : '';
-    document.getElementById('dGroup').textContent = `Group ${rec.group}${s ? ' · '+ordinal(s.pos)+' place' : ''}${popTxt}`;
+    const rankTxt = rankOf(rec.fifa) ? ` · FIFA #${rankOf(rec.fifa)}` : '';
+    document.getElementById('dGroup').textContent = `Group ${rec.group}${s ? ' · '+ordinal(s.pos)+' place' : ''}${rankTxt}${popTxt}`;
     document.getElementById('dStats').innerHTML = s ? `
       <span class="pill">P <b>${r.mp}</b></span><span class="pill">W <b>${r.w}</b></span>
       <span class="pill">D <b>${r.d}</b></span><span class="pill">L <b>${r.l}</b></span>
@@ -973,18 +1001,106 @@
   function getH2H(a, b) {
     return H2H_FACTS[h2hKey(a, b)] || null;
   }
-  function showH2H(homeId, awayId) {
+
+  // ---- FIFA World Ranking (api.fifa.com — CORS-open, so loaded live) --------
+  let fifaRanks = {};   // FIFA code -> { rank, pts }
+  async function loadRankings() {
+    try {
+      const cached = JSON.parse(localStorage.getItem('wc-ranks') || 'null');
+      if (cached && Date.now() - cached.t < CONFIG.rankTtlMs) { fifaRanks = cached.r; return; }
+      // Latest men's ranking schedule (gender 1 = men, type 0), then its table.
+      const sched = await (await fetch(`${CONFIG.fifaApi}/rankingschedules/all?type=0&gender=1`)).json();
+      const latest = (sched.Results || []).slice()
+        .sort((x, y) => (y.OfficialDate || '').localeCompare(x.OfficialDate || ''))[0];
+      if (!latest) return;
+      const rk = await (await fetch(`${CONFIG.fifaApi}/rankingsbyschedule?rankingScheduleId=${latest.IdRankingSchedule}&count=300`)).json();
+      const map = {};
+      for (const r of (rk.Results || [])) if (r.IdCountry) map[r.IdCountry] = { rank: r.Rank, pts: r.TotalPoints };
+      fifaRanks = map;
+      localStorage.setItem('wc-ranks', JSON.stringify({ t: Date.now(), r: map }));
+    } catch (e) { console.warn('FIFA ranking load failed', e); }
+  }
+  const rankOf = (fifa) => (fifaRanks[fifa] || {}).rank || null;
+
+  // ---- Head-to-head (pre-baked, bracket-driven — scripts/build_h2h.py) ------
+  // FIFA's complete H2H is behind a bot-walled, non-CORS endpoint, so it can't be
+  // fetched from the browser. We bake it (per knockout tie, as the bracket fills)
+  // into h2h.json and load that here. Records are keyed by sorted FIFA codes and
+  // oriented to the alphabetically-first code.
+  let h2hData = null;          // { "A|B": record } once loaded
+  let h2hReqId = 0;            // guards against out-of-order async renders
+  async function loadH2H(force) {
+    if (h2hData && !force) return h2hData;
+    try { h2hData = await (await fetch(CONFIG.h2hData, { cache: 'no-cache' })).json(); }
+    catch (e) { console.warn('H2H data load failed', e); h2hData = h2hData || {}; }
+    return h2hData;
+  }
+
+  // Render the baked record, re-oriented to a = home/left, b = away/right.
+  function renderH2HRecord(rec, a, b) {
+    const aFirst = a.fifa < b.fifa;                       // rec is oriented to the lower code
+    const wA = aFirst ? rec.w[0] : rec.w[2];
+    const wB = aFirst ? rec.w[2] : rec.w[0];
+    const gA = aFirst ? rec.g[0] : rec.g[1];
+    const gB = aFirst ? rec.g[1] : rec.g[0];
+    const wcA = aFirst ? rec.wc[0] : rec.wc[2];
+    const wcB = aFirst ? rec.wc[2] : rec.wc[0];
+    const wcD = rec.wc[1], wcN = rec.wc[3];
+    const nameOf = (c) => c === a.fifa ? a.name : b.name;
+    let lastLine = '';
+    if (rec.last) {
+      const L = rec.last, yr = (L.date || '').slice(0, 4);
+      lastLine = `${nameOf(L.h)} ${L.hs}–${L.as} ${nameOf(L.a)}`;
+      if (L.pen) {
+        const win = Math.max(L.pen.hp, L.pen.ap), lose = Math.min(L.pen.hp, L.pen.ap);
+        lastLine += ` <span class="h2h-pen">(${nameOf(L.pen.pw)} won ${win}–${lose} on pens)</span>`;
+      }
+      const ctx = [yr, L.comp].filter(Boolean).join(' · ');
+      if (ctx) lastLine += ` <span class="h2h-tot">— ${ctx}</span>`;
+    }
+    const wc = wcN
+      ? `<div class="h2h-row"><span class="k">World Cup</span><span><b>${wcA}–${wcD}–${wcB}</b>
+           in ${wcN} ${wcN === 1 ? 'meeting' : 'meetings'}</span></div>` : '';
+    return `<div class="h2h-rec">
+        <div class="h2h-tot"><b>${rec.p}</b> ${rec.p === 1 ? 'meeting' : 'meetings'}
+          · goals <b>${gA}–${gB}</b></div>
+        <div class="h2h-wdl">
+          <span><span class="nm">${a.name}</span> <span class="n">${wA}</span></span>
+          <span class="d">${rec.w[1]} drawn</span>
+          <span><span class="n">${wB}</span> <span class="nm">${b.name}</span></span>
+        </div>
+        ${wc}
+        ${lastLine ? `<div class="h2h-row"><span class="k">Last met</span><span>${lastLine}</span></div>` : ''}
+        <div class="h2h-src">Official FIFA head-to-head — all senior internationals.</div>
+      </div>`;
+  }
+
+  const rankChip = (fifa) => { const r = rankOf(fifa); return r ? ` <span class="h2h-rk">#${r}</span>` : ''; };
+
+  async function showH2H(homeId, awayId) {
     const a = teamsById.get(String(homeId)), b = teamsById.get(String(awayId));
     if (!a || !b) return;
-    const fact = getH2H(a.fifa, b.fifa)
-      || `No notable World Cup head-to-head between ${a.name} and ${b.name} on record yet — a fresh knockout encounter.`;
-    document.getElementById('h2h').innerHTML =
+    const fact = getH2H(a.fifa, b.fifa);
+    const el = document.getElementById('h2h');
+    el.innerHTML =
       `<button class="x" aria-label="Close">×</button>
        <div class="h2h-title">⚔ Head-to-head</div>
-       <div class="h2h-teams"><img src="${a.flag}" alt=""><span>${a.name}</span>
-         <span class="vs">vs</span><span>${b.name}</span><img src="${b.flag}" alt=""></div>
-       <div class="h2h-fact">${fact}</div>`;
-    document.getElementById('h2h').classList.add('open');
+       <div class="h2h-teams"><img src="${a.flag}" alt=""><span>${a.name}${rankChip(a.fifa)}</span>
+         <span class="vs">vs</span><span>${b.name}${rankChip(b.fifa)}</span><img src="${b.flag}" alt=""></div>
+       ${fact ? `<div class="h2h-fact">${fact}</div>` : ''}
+       <div class="h2h-live"><div class="h2h-loading">Loading FIFA record…</div></div>`;
+    el.classList.add('open');
+
+    const reqId = ++h2hReqId;
+    const data = await loadH2H();
+    if (reqId !== h2hReqId) return;                      // a newer card opened — drop this result
+    const rec = data[h2hKey(a.fifa, b.fifa)];
+    const live = el.querySelector('.h2h-live');
+    if (!live) return;
+    if (rec)       live.innerHTML = renderH2HRecord(rec, a, b);
+    else if (fact) live.innerHTML = '';                  // curated fact already carries the story
+    else live.innerHTML = `<div class="h2h-rec muted">FIFA head-to-head for this tie isn't in the
+      data yet — it's added automatically once the matchup is set.</div>`;
   }
   function closeH2H() { const el = document.getElementById('h2h'); if (el) el.classList.remove('open'); }
 
@@ -996,6 +1112,12 @@
     await loadData();
     updateBadge();
     renderSidebar();
+    loadRankings().then(() => {            // ranking loads async (CORS-open) — repaint badges when ready
+      renderSidebar();
+      if (selectedId) { const row = document.querySelector(`#groups .team[data-id="${selectedId}"]`); if (row) row.classList.add('active'); }
+      if (selectedId && teamsById.has(selectedId) && document.getElementById('detail').classList.contains('open'))
+        renderDetail(teamsById.get(selectedId));
+    });
     await loadBoundaries();
 
     document.getElementById('search').addEventListener('input', e => filterSidebar(e.target.value));
@@ -1005,6 +1127,7 @@
     tb.addEventListener('click', () => applyTheme(!isDark, true));
     document.getElementById('dClose').addEventListener('click', closeDetail);
     document.getElementById('refreshBtn').addEventListener('click', async () => {
+      loadH2H(true);   // re-pull the baked H2H so newly-set ties / results show
       await loadData(); updateBadge(); renderSidebar(); restyleAll();
       if (document.body.classList.contains('view-bracket')) buildBracket();
       if (selectedId && teamsById.has(selectedId)) selectTeam(selectedId);

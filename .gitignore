@@ -1,8 +1,12 @@
 .claude/
 Screenshot*.png
 squad_leagues.gen.js
+fifa_team_ids.gen.js
 .DS_Store
 
 # Python
 __pycache__/
 *.pyc
+
+# Local-only session handover (do not push)
+HANDOVER.md
