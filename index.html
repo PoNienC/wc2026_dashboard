@@ -1142,6 +1142,7 @@
     closeH2H(); closeThird();
     if (v==='bracket') {
       buildBracket();
+      openThird();   // surface the 3rd-place race card by default on entering the bracket
       if (map) { map.invalidateSize(); map.setView([20,0], 2, { animate:false }); }
     } else if (v==='scorers') {
       buildLeaderboard();
