@@ -264,6 +264,11 @@
   .bk-3rd-chip{margin-left:12px;font:inherit;font-size:12px;font-weight:600;color:var(--ink);background:var(--panel);
     border:1px solid var(--line);border-radius:999px;padding:4px 12px;cursor:pointer;vertical-align:middle;white-space:nowrap;}
   .bk-3rd-chip:hover{border-color:var(--selected);color:var(--selected);}
+  /* same card, opened from the Map tab's sidebar */
+  .sb-3rd-chip{display:block;width:100%;margin-top:8px;font:inherit;font-size:12.5px;font-weight:600;
+    color:var(--ink);background:var(--panel);border:1px solid var(--line);border-radius:999px;
+    padding:7px 12px;cursor:pointer;transition:border-color .15s,color .15s;}
+  .sb-3rd-chip:hover{border-color:var(--selected);color:var(--selected);}
   #third{display:none;position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:800;width:min(560px,94vw);
     max-height:88vh;overflow:auto;background:var(--panel);border:1px solid var(--line);border-radius:14px;
     box-shadow:0 18px 60px rgba(0,0,0,.45);padding:18px 22px 18px;}
@@ -353,6 +358,7 @@
     <aside id="sidebar">
       <div class="sidebar-tools">
         <input id="search" class="search" type="search" placeholder="Search a nation or group…" aria-label="Search" />
+        <button class="sb-3rd-chip" id="mapThirdChip" title="Best third-placed teams — top 8 reach the Round of 32">🥉 3rd-place race</button>
       </div>
       <div class="legend">
         <span class="item"><span class="swatch" style="background:#2563eb"></span>Europe</span>
@@ -1338,6 +1344,7 @@
     tb.textContent = isDark ? '☀️' : '🌙';
     tb.addEventListener('click', () => applyTheme(!isDark, true));
     document.getElementById('dClose').addEventListener('click', closeDetail);
+    document.getElementById('mapThirdChip').addEventListener('click', openThird);   // 3rd-place race from the Map tab
     document.getElementById('refreshBtn').addEventListener('click', async () => {
       loadH2H(true);   // re-pull the baked H2H so newly-set ties / results show
       await loadData(); updateBadge(); renderSidebar(); restyleAll();
