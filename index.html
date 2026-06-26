@@ -357,6 +357,7 @@
     // Static fallback (same project's repo data; real draw, standings may lag).
     staticTeams:  'https://cdn.jsdelivr.net/gh/rezarahiminia/worldcup2026@main/football.teams.json',
     staticGroups: 'https://cdn.jsdelivr.net/gh/rezarahiminia/worldcup2026@main/worldcup2026.groups.json',
+    staticGames:  'https://cdn.jsdelivr.net/gh/rezarahiminia/worldcup2026@main/football.matches.json',
     // Boundaries: Natural Earth 1:50m (full coverage incl. Cape Verde, Curaçao). Match on ADM0_A3.
     geojsonUrl:      'https://cdn.jsdelivr.net/gh/nvkelso/natural-earth-vector@master/geojson/ne_50m_admin_0_countries.geojson',
     geojsonFallback: 'https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_50m_admin_0_countries.geojson',
@@ -495,20 +496,25 @@
   const dateLabel = (s) => { const m = /(\d+)\/(\d+)\/(\d+)/.exec(s||''); return m ? `${m[1]}/${m[2]}` : ''; };
 
   async function loadData() {
+    // Fetch each source independently and fall back to its static snapshot per-source, so one
+    // flaky endpoint can't blank the dashboard. The bracket / fixtures / scorers need games, so we
+    // never ingest empty games on a hiccup — we drop back to the static schedule instead.
+    let liveOk = true;
+    const get = async (live, fallback) => {
+      try { return await fetchJSON(live); }
+      catch (e) { liveOk = false; console.warn('Live fetch failed, using static:', live, e); return fetchJSON(fallback); }
+    };
     try {
       const [tj, gj, mj] = await Promise.all([
-        fetchJSON(CONFIG.api + '/teams'), fetchJSON(CONFIG.api + '/groups'), fetchJSON(CONFIG.api + '/games'),
+        get(CONFIG.api + '/teams',  CONFIG.staticTeams),
+        get(CONFIG.api + '/groups', CONFIG.staticGroups),
+        get(CONFIG.api + '/games',  CONFIG.staticGames),
       ]);
       ingest(tj.teams || tj, gj.groups || gj, mj.games || mj);
-      isLive = true;
+      isLive = liveOk;
       lastUpdated = (gj.groups || gj).map(g => g.updatedAt).filter(Boolean).sort().pop() || null;
     } catch (e) {
-      console.warn('Live API failed — falling back to static repo JSON.', e);
-      try {
-        const [tj, gj] = await Promise.all([ fetchJSON(CONFIG.staticTeams), fetchJSON(CONFIG.staticGroups) ]);
-        ingest(tj.teams || tj, gj.groups || gj, []);
-        isLive = false;
-      } catch (e2) { console.error('All data sources failed.', e2); ingest([], [], []); }
+      console.error('All data sources failed.', e); ingest([], [], []);
     }
   }
 
