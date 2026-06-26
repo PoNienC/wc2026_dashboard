@@ -144,6 +144,14 @@
   .bar-track{background:#f1f2f4;border-radius:5px;height:16px;overflow:hidden;}
   .bar-fill{display:block;height:100%;border-radius:5px;min-width:3px;transition:width .5s ease;}
   .bar-n{text-align:right;font-weight:600;color:#374151;font-variant-numeric:tabular-nums;}
+  /* Squad list (detail panel) */
+  #dSquad{margin-bottom:6px;}
+  .sq-grp{font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);font-weight:700;margin:9px 0 2px;}
+  .sq-row{display:grid;grid-template-columns:18px minmax(0,1.25fr) minmax(0,1fr);gap:9px;align-items:baseline;padding:3px 1px;font-size:12.5px;}
+  .sq-row .sq-no{color:var(--muted);font-size:10.5px;text-align:right;}
+  .sq-row .sq-name{color:var(--ink);font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .sq-row .sq-club{color:var(--muted);font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:right;}
+  .sq-empty{font-size:12px;color:var(--muted);padding:4px 0;}
   .fixtures{display:flex;flex-direction:column;gap:6px;}
   .fx{display:grid;grid-template-columns:30px 1fr auto;gap:8px;align-items:center;font-size:12px;
       border:1px solid var(--line);border-radius:8px;padding:7px 9px;}
@@ -376,6 +384,8 @@
           <div class="funfact" id="dFact"></div>
           <div class="d-sec">Where the 26-man squad plays <span class="tag">by club country</span></div>
           <div id="dChart"></div>
+          <div class="d-sec" style="margin-top:6px">Squad <span class="tag" id="dCoach"></span></div>
+          <div id="dSquad"></div>
           <div class="d-sec" style="margin-top:6px">Group fixtures</div>
           <div class="fixtures" id="dFixtures"></div>
         </div>
@@ -415,6 +425,9 @@
     // daily (scripts/build_h2h.py + the GitHub Action). FIFA's complete H2H sits behind a
     // bot-walled, non-CORS endpoint, so we bake it server-side and serve this file.
     h2hData: 'h2h.json',
+    // 26-man squads (player · position · club) + head coach, parsed from Wikipedia.
+    // Regenerate with scripts/build_squads.py.
+    squads: 'squads.json',
     // FIFA/Coca-Cola World Ranking — api.fifa.com IS CORS-open, so the ranking loads live.
     fifaApi: 'https://api.fifa.com/api/v3',
     rankTtlMs: 24 * 60 * 60 * 1000,   // ranking changes ~monthly — cache a day in localStorage
@@ -528,6 +541,7 @@
   const teamsByFifa = new Map();    // FIFA code -> team record (for the FIFA bracket overlay)
   let topScorers = [];              // global Golden Boot leaderboard [{name,goals,teamId}]
   let thirdPlaceRanking = [];       // best third-placed teams (computed from FIFA group matches)
+  let squadsData = null;            // { fifa: {coach, players:[{no,n,p,c,cn}]} } — lazy-loaded squads.json
   const scorersByTeam = new Map();  // teamId -> [{name,goals}] sorted desc
   const teamsByIso3 = new Map();    // iso3 -> [team records] (England=ENG, Scotland=SCT home-nation polygons)
   const gamesByTeam = new Map();    // id -> [game]
@@ -840,6 +854,37 @@
     return null;
   }
 
+  // Lazy-load the baked 26-man squads (player · position · club + coach), once.
+  async function loadSquads() {
+    if (squadsData) return;
+    try { squadsData = await (await fetch(CONFIG.squads)).json(); }
+    catch (e) { console.warn('Squads load failed', e); squadsData = {}; }
+  }
+  const SQ_GROUPS = [['GK','Goalkeepers'],['DF','Defenders'],['MF','Midfielders'],['FW','Forwards']];
+  function renderSquadSection(rec) {
+    const box = document.getElementById('dSquad'), coachTag = document.getElementById('dCoach');
+    const sq = squadsData && squadsData[rec.fifa];
+    if (!sq) {
+      coachTag.textContent = '';
+      box.innerHTML = `<div class="sq-empty">${squadsData ? 'Squad not available.' : 'Loading squad…'}</div>`;
+      if (!squadsData) loadSquads().then(() => {           // first open — fetch, then repaint if still selected
+        if (selectedId === rec.id && document.getElementById('detail').classList.contains('open')) renderSquadSection(rec);
+      });
+      return;
+    }
+    coachTag.textContent = sq.coach ? 'Coach: ' + sq.coach : '';
+    const row = (p) => `<div class="sq-row"><span class="sq-no">${p.no || ''}</span>
+      <span class="sq-name">${p.n}</span><span class="sq-club">${p.c || ''}</span></div>`;
+    let html = '';
+    for (const [pos, label] of SQ_GROUPS) {
+      const ps = sq.players.filter(p => p.p === pos);
+      if (ps.length) html += `<div class="sq-grp">${label}</div>` + ps.map(row).join('');
+    }
+    const other = sq.players.filter(p => !SQ_GROUPS.some(g => g[0] === p.p));
+    if (other.length) html += `<div class="sq-grp">Squad</div>` + other.map(row).join('');
+    box.innerHTML = html || `<div class="sq-empty">Squad not available.</div>`;
+  }
+
   function renderDetail(rec) {
     const s = standingRow(rec.id); const r = s ? s.row : rec;
     document.getElementById('dFlag').src = rec.flag;
@@ -879,6 +924,8 @@
       chart.innerHTML = `<div class="empty">Squad-league breakdown for <b>${rec.name}</b> isn't wired yet.
         Plug a squad source (e.g. API-Football <code>/players/squads</code>) into <code>SQUAD_LEAGUES['${rec.fifa}']</code>.</div>`;
     }
+
+    renderSquadSection(rec);
 
     // fixtures
     const fx = (gamesByTeam.get(rec.id) || []).filter(g => g.type==='group').slice().sort((a,b)=>a.key.localeCompare(b.key));
@@ -1272,6 +1319,7 @@
       if (selectedId && teamsById.has(selectedId) && document.getElementById('detail').classList.contains('open'))
         renderDetail(teamsById.get(selectedId));
     });
+    loadSquads();                          // warm the squad list (shown in the detail panel)
     await loadBoundaries();
 
     document.getElementById('search').addEventListener('input', e => filterSidebar(e.target.value));
