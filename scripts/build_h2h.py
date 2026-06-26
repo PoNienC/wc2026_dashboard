@@ -1,17 +1,18 @@
 #!/usr/bin/env python3
 """Regenerate h2h.json — head-to-head records for the knockout matchups that the
-bracket has actually produced. Bracket-driven and incremental: it reads the same
-live games feed the dashboard uses, finds the knockout ties where BOTH nations are
-known, and bakes only those pairs. The full knockout is 32 matches, so this is at
-most 32 FIFA calls (1 today, ~16 once the groups finish) — not the 1,128 of an
-all-pairs bake.
+bracket has actually produced. Bracket-driven and incremental: it reads FIFA's official
+WC2026 feed (the same source the dashboard's bracket overlay uses), finds the knockout
+ties where BOTH nations are known, and bakes only those pairs. The full knockout is 32
+matches, so this is at most 32 FIFA calls — not the 1,128 of an all-pairs bake.
 
 Why pre-bake at all: FIFA's complete H2H lives behind inside.fifa.com's bot-walled,
 non-CORS BFF, so a static site can't fetch it live. It works fine from a normal IP
 (this script), so we bake it and the app loads the JSON. See HANDOVER.md.
 
 Sources:
-  - worldcup26.ir /get/{games,teams} — the live bracket + our 48 nations (FIFA codes).
+  - api.fifa.com .../calendar/matches?idCompetition=17&idSeason=285023 — official WC2026
+    knockout ties (MatchNumber >= 73; Home/Away.IdCountry == our FIFA code). Authoritative
+    and current, unlike the worldcup26.ir feed which lags on qualification.
   - inside.fifa.com/api/data-centre/head-to-head/head-to-head?teamA=&teamB=&language=en
     — FIFA's authoritative H2H: per-side aggregate (played, W/D/L, goals, clean sheets,
     counting shootout wins as wins) plus the full match list.
@@ -40,8 +41,9 @@ UA = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
                     "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124 Safari/537.36",
       "Accept": "application/json"}
 
-GAMES_API = "https://worldcup26.ir/get/games"
-TEAMS_API = "https://worldcup26.ir/get/teams"
+# FIFA's official WC2026 feed drives which knockout ties are baked (worldcup26.ir lags).
+WC_MATCHES = ("https://api.fifa.com/api/v3/calendar/matches"
+              "?idCompetition=17&idSeason=285023&count=200")
 BFF = ("https://inside.fifa.com/api/data-centre/head-to-head/head-to-head"
        "?teamA={a}&teamB={b}&language=en")
 THROTTLE_S = 0.4          # be gentle with the bot-walled endpoint
@@ -77,26 +79,18 @@ def get_json(url: str, timeout: int = 30) -> dict:
     raise RuntimeError(f"failed after {RETRIES} attempts: {url} ({last})")
 
 
-def _list(payload: dict, *keys: str) -> list:
-    for k in keys:
-        if isinstance(payload.get(k), list):
-            return payload[k]
-    return payload if isinstance(payload, list) else \
-        next((v for v in payload.values() if isinstance(v, list)), [])
-
-
 def determined_pairs() -> list[tuple[str, str]]:
-    """Knockout ties (type != group) where both nations are currently known."""
-    teams = _list(get_json(TEAMS_API), "teams", "data")
-    by_id = {str(t["id"]): t["fifa_code"] for t in teams}
-    games = _list(get_json(GAMES_API), "games", "data")
+    """Knockout ties (MatchNumber >= 73) where both nations are known, from FIFA's official
+    WC2026 feed. worldcup26.ir lags on qualification, so we trust FIFA — the same source the
+    dashboard's bracket overlay uses — so the baked H2H matches what's shown."""
     pairs = set()
-    for m in games:
-        if str(m.get("type", "")).lower() == "group":
+    for m in get_json(WC_MATCHES).get("Results", []):
+        if (m.get("MatchNumber") or 0) < 73:
             continue
-        h, a = str(m.get("home_team_id")), str(m.get("away_team_id"))
-        if h in by_id and a in by_id:
-            pairs.add(tuple(sorted((by_id[h], by_id[a]))))
+        h = (m.get("Home") or {}).get("IdCountry")
+        a = (m.get("Away") or {}).get("IdCountry")
+        if h in FIFA_TEAM_IDS and a in FIFA_TEAM_IDS:
+            pairs.add(tuple(sorted((h, a))))
     return sorted(pairs)
 
 

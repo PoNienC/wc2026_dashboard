@@ -372,6 +372,9 @@
     // FIFA/Coca-Cola World Ranking — api.fifa.com IS CORS-open, so the ranking loads live.
     fifaApi: 'https://api.fifa.com/api/v3',
     rankTtlMs: 24 * 60 * 60 * 1000,   // ranking changes ~monthly — cache a day in localStorage
+    // FIFA's official WC2026 match feed drives the knockout bracket — the worldcup26.ir feed
+    // lags on who has qualified. idCompetition 17 = men's World Cup; idSeason 285023 = 2026.
+    wcCompetition: '17', wcSeason: '285023',
     tilesLight: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
     tilesDark:  'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
     style: {
@@ -476,6 +479,7 @@
   // ===================================================================
   let map, geoLayer, ukLayer, baseTiles, isDark = false, colourMode = 'continent', isLive = false, lastUpdated = null, selectedId = null, bkHi = null;
   const teamsById = new Map();      // id -> team record
+  const teamsByFifa = new Map();    // FIFA code -> team record (for the FIFA bracket overlay)
   let topScorers = [];              // global Golden Boot leaderboard [{name,goals,teamId}]
   const scorersByTeam = new Map();  // teamId -> [{name,goals}] sorted desc
   const teamsByIso3 = new Map();    // iso3 -> [team records] (England=ENG, Scotland=SCT home-nation polygons)
@@ -516,15 +520,40 @@
     } catch (e) {
       console.error('All data sources failed.', e); ingest([], [], []);
     }
+    await applyFifaBracket();   // FIFA's official knockout assignments override the lagging feed
+  }
+
+  // Overlay the knockout bracket (M73–M104) with FIFA's official, up-to-date team assignments +
+  // results. worldcup26.ir lags on who has qualified, so we trust FIFA (api.fifa.com is CORS-open)
+  // for the bracket; standings / scorers stay on worldcup26.ir. FIFA's MatchNumber == our M-id, and
+  // Home/Away.IdCountry == our FIFA code. Additive: if the fetch fails, the feed's bracket remains.
+  async function applyFifaBracket() {
+    try {
+      const url = `${CONFIG.fifaApi}/calendar/matches?idCompetition=${CONFIG.wcCompetition}&idSeason=${CONFIG.wcSeason}&count=200`;
+      const data = await (await fetch(url, { cache:'no-store' })).json();
+      for (const m of (data.Results || [])) {
+        const num = m.MatchNumber;
+        if (!num || num < 73) continue;                    // knockout matches only
+        const id = String(num);
+        const g = gamesById.get(id) || { id, homeId:'0', awayId:'0', hs:0, as:0, finished:false, type:'ko' };
+        const ht = teamsByFifa.get((m.Home || {}).IdCountry), at = teamsByFifa.get((m.Away || {}).IdCountry);
+        if (ht) g.homeId = ht.id;
+        if (at) g.awayId = at.id;
+        const hs = (m.Home || {}).Score, as = (m.Away || {}).Score;
+        if (hs != null && as != null) { g.hs = hs; g.as = as; g.finished = true; }
+        gamesById.set(id, g);
+      }
+    } catch (e) { console.warn('FIFA bracket overlay failed — keeping worldcup26.ir bracket.', e); }
   }
 
   function ingest(teams, groups, games) {
-    teamsById.clear(); teamsByIso3.clear(); gamesByTeam.clear(); gamesById.clear();
+    teamsById.clear(); teamsByFifa.clear(); teamsByIso3.clear(); gamesByTeam.clear(); gamesById.clear();
     for (const t of teams) {
       const iso3 = toIso3(t.fifa_code);
       const rec = { id:String(t.id), name:t.name_en, fifa:t.fifa_code, iso2:t.iso2, iso3,
                     flag:t.flag, group:t.groups };
       teamsById.set(rec.id, rec);
+      teamsByFifa.set(rec.fifa, rec);
       if (!teamsByIso3.has(iso3)) teamsByIso3.set(iso3, []);
       teamsByIso3.get(iso3).push(rec);
     }
