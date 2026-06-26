@@ -252,6 +252,35 @@
   .h2h-row b{color:var(--ink);}
   .h2h-pen{color:var(--selected);font-weight:600;white-space:nowrap;}
   .h2h-src{margin-top:11px;font-size:10.5px;color:var(--muted);opacity:.8;line-height:1.4;}
+  /* Best third-placed teams card (bracket page) */
+  .bk-3rd-chip{margin-left:12px;font:inherit;font-size:12px;font-weight:600;color:var(--ink);background:var(--panel);
+    border:1px solid var(--line);border-radius:999px;padding:4px 12px;cursor:pointer;vertical-align:middle;white-space:nowrap;}
+  .bk-3rd-chip:hover{border-color:var(--selected);color:var(--selected);}
+  #third{display:none;position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:800;width:min(560px,94vw);
+    max-height:88vh;overflow:auto;background:var(--panel);border:1px solid var(--line);border-radius:14px;
+    box-shadow:0 18px 60px rgba(0,0,0,.45);padding:18px 22px 18px;}
+  #third.open{display:block;}
+  #third .x{position:absolute;top:8px;right:12px;border:0;background:transparent;color:var(--muted);font-size:22px;cursor:pointer;line-height:1;}
+  .tp-sub{font-size:12.5px;color:var(--muted);margin-bottom:12px;line-height:1.45;}
+  .tp-head,.tp-row{display:grid;grid-template-columns:26px 28px 1fr 38px 32px 40px 36px;gap:9px;align-items:center;}
+  .tp-head{font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);padding:0 9px 7px;border-bottom:1px solid var(--line);}
+  .tp-head span,.tp-row .tp-grp,.tp-row .tp-num,.tp-row .tp-pts{text-align:center;}
+  .tp-head .tp-nm{text-align:left;}
+  .tp-row{padding:8px 9px;border-radius:9px;font-size:14px;margin-top:2px;}
+  .tp-row img{width:24px;height:16px;border-radius:2px;box-shadow:0 0 0 1px rgba(0,0,0,.12);}
+  .tp-row .tp-rank{font-weight:700;color:var(--muted);text-align:center;font-size:12.5px;}
+  .tp-row .tp-name{font-weight:600;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .tp-row .tp-grp,.tp-row .tp-num{color:var(--muted);font-size:13px;}
+  .tp-row .tp-pts{font-weight:700;color:var(--ink);}
+  .tp-row.q{background:rgba(34,197,94,.13);}
+  .tp-row.q .tp-rank{color:#16a34a;}
+  body.theme-dark .tp-row.q{background:rgba(34,197,94,.16);}
+  body.theme-dark .tp-row.q .tp-rank{color:#4ade80;}
+  .tp-cut{display:flex;align-items:center;gap:8px;margin:9px 2px 3px;font-size:10px;text-transform:uppercase;
+    letter-spacing:.06em;color:var(--muted);}
+  .tp-cut::before,.tp-cut::after{content:"";flex:1;height:1px;background:var(--line);}
+  .tp-row.out{opacity:.5;}
+  .tp-foot{margin-top:12px;font-size:10.5px;color:var(--muted);opacity:.8;line-height:1.4;}
   .mdate{font-size:9px;color:var(--muted);padding:3px 8px;border-bottom:1px solid var(--line);background:#fafafa;}
   .mteam{display:flex;align-items:center;gap:7px;padding:7px 9px;font-size:12px;}
   .mteam+.mteam{border-top:1px solid #f1f2f4;}
@@ -269,10 +298,26 @@
   .bk-third .lab{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);text-align:center;padding-bottom:6px;}
 
   @media (max-width:640px){
+    /* Header wraps so the Map / Bracket / Scorers switch is always reachable (it used to
+       overflow off-screen on phones). View switch gets its own full-width row. */
+    header{flex-wrap:wrap;gap:8px 6px;padding:8px 12px;}
+    header .spacer{display:none;}
+    header .title{flex:1 1 auto;font-size:15px;order:1;}
+    header .title span{display:none;}            /* drop the "· Qualified Nations" subtitle on phones */
+    #dataBadge{order:2;font-size:11px;}
+    #themeBtn{order:3;} #refreshBtn{order:4;padding:6px 10px;}
+    #viewSeg{order:10;flex:1 1 100%;}
+    #viewSeg button{flex:1;padding:8px 0;}
+    #colourSeg, #visits, #resetBtn{display:none;}   /* non-essential controls hidden on phones */
+
     main{flex-direction:column;}
     #sidebar{flex:0 0 auto;max-width:none;width:100%;max-height:42%;border-right:0;border-bottom:1px solid var(--line);}
-    #detail{top:auto;left:10px;width:auto;max-height:60%;transform:translateY(420px);}
+    #detail{top:auto;left:10px;right:10px;width:auto;max-height:62%;transform:translateY(520px);}
     #detail.open{transform:translateY(0);}
+    /* Scorers: the two side panels would collide on a phone — make them full-width bottom sheets. */
+    #scorer-board, #scorer-nation{left:0;right:0;top:auto;bottom:0;width:auto;max-height:60%;border-radius:14px 14px 0 0;}
+    /* The bracket page already scrolls (overflow:auto); the zoom nudge for scorers isn't needed on mobile. */
+    body.view-scorers .leaflet-top.leaflet-left{left:0;}
   }
 </style>
 </head>
@@ -343,6 +388,7 @@
 
     <div id="bracket-view" aria-label="Knockout bracket"></div>
     <div id="h2h" aria-live="polite"></div>
+    <div id="third" aria-live="polite"></div>
   </main>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
@@ -481,6 +527,7 @@
   const teamsById = new Map();      // id -> team record
   const teamsByFifa = new Map();    // FIFA code -> team record (for the FIFA bracket overlay)
   let topScorers = [];              // global Golden Boot leaderboard [{name,goals,teamId}]
+  let thirdPlaceRanking = [];       // best third-placed teams (computed from FIFA group matches)
   const scorersByTeam = new Map();  // teamId -> [{name,goals}] sorted desc
   const teamsByIso3 = new Map();    // iso3 -> [team records] (England=ENG, Scotland=SCT home-nation polygons)
   const gamesByTeam = new Map();    // id -> [game]
@@ -530,8 +577,8 @@
   async function applyFifaBracket() {
     try {
       const url = `${CONFIG.fifaApi}/calendar/matches?idCompetition=${CONFIG.wcCompetition}&idSeason=${CONFIG.wcSeason}&count=200`;
-      const data = await (await fetch(url, { cache:'no-store' })).json();
-      for (const m of (data.Results || [])) {
+      const results = (await (await fetch(url, { cache:'no-store' })).json()).Results || [];
+      for (const m of results) {
         const num = m.MatchNumber;
         if (!num || num < 73) continue;                    // knockout matches only
         const id = String(num);
@@ -543,7 +590,37 @@
         if (hs != null && as != null) { g.hs = hs; g.as = as; g.finished = true; }
         gamesById.set(id, g);
       }
+      thirdPlaceRanking = computeThirdPlace(results);       // the best-third-placed-teams card
     } catch (e) { console.warn('FIFA bracket overlay failed — keeping worldcup26.ir bracket.', e); }
+  }
+
+  // Best third-placed teams: tally each group from FIFA's played group matches, take the 3rd-placed
+  // side from all 12 groups and rank them (points, then goal difference, then goals for). The top 8
+  // of 12 reach the Round of 32. (Exact order of ties may differ from FIFA's deeper tiebreakers.)
+  function computeThirdPlace(results) {
+    const tab = {};   // group -> { fifa -> {pts,gd,gf,gp} }
+    for (const m of results) {
+      if ((m.MatchNumber || 0) >= 73) continue;            // group stage only
+      const H = m.Home || {}, A = m.Away || {};
+      const hs = H.Score, as = A.Score;
+      if (hs == null || as == null) continue;              // unplayed
+      const grp = ((m.GroupName || [])[0] || {}).Description || '';
+      const t = (tab[grp] = tab[grp] || {});
+      for (const [c, gf, ga] of [[H.IdCountry, hs, as], [A.IdCountry, as, hs]]) {
+        if (!c) continue;
+        const r = (t[c] = t[c] || { pts:0, gd:0, gf:0, gp:0 });
+        r.gd += gf - ga; r.gf += gf; r.gp++; r.pts += gf > ga ? 3 : gf === ga ? 1 : 0;
+      }
+    }
+    const thirds = [];
+    for (const grp in tab) {
+      const ranked = Object.entries(tab[grp])
+        .sort((a, b) => b[1].pts - a[1].pts || b[1].gd - a[1].gd || b[1].gf - a[1].gf);
+      if (ranked.length >= 3) thirds.push({ fifa: ranked[2][0], group: grp.replace('Group ', ''), ...ranked[2][1] });
+    }
+    thirds.sort((a, b) => b.pts - a.pts || b.gd - a.gd || b.gf - a.gf);
+    thirds.forEach((t, i) => t.qualifies = i < 8);
+    return thirds;
   }
 
   function ingest(teams, groups, games) {
@@ -894,7 +971,8 @@
       <div class="bk-third"><div class="lab">Match for third place</div>${matchBox(BK_THIRD)}</div></div>`;
     document.getElementById('bracket-view').innerHTML =
       `<h2 class="bk-title">Knockout bracket
-        <span class="bk-sub">· bold = winner · click a team for the map · click ⚔ H2H for head-to-head</span></h2>
+        <span class="bk-sub">· bold = winner · click a team for the map · click ⚔ H2H for head-to-head</span>
+        <button class="bk-3rd-chip" id="thirdChip">🥉 3rd-place race</button></h2>
       <div class="bracket">${bkHalf('left',BK_LEFT)}${centre}${bkHalf('right',BK_RIGHT)}</div>`;
     drawConnectors();
   }
@@ -1014,7 +1092,7 @@
     document.body.classList.toggle('view-bracket', v==='bracket');
     document.body.classList.toggle('view-scorers', v==='scorers');
     document.getElementById('colourSeg').style.display = v==='map' ? '' : 'none';
-    closeH2H();
+    closeH2H(); closeThird();
     if (v==='bracket') {
       buildBracket();
       if (map) { map.invalidateSize(); map.setView([20,0], 2, { animate:false }); }
@@ -1145,6 +1223,41 @@
   }
   function closeH2H() { const el = document.getElementById('h2h'); if (el) el.classList.remove('open'); }
 
+  // Best third-placed-teams card (bracket page) — data from computeThirdPlace().
+  function renderThirdPlace() {
+    const el = document.getElementById('third');
+    if (!thirdPlaceRanking.length) {
+      el.innerHTML = `<button class="x" aria-label="Close">×</button>
+        <div class="h2h-title">🥉 Best third-placed teams</div>
+        <div class="tp-sub">The ranking fills in as group results land — check back once more groups finish.</div>`;
+      return;
+    }
+    const row = (t, i) => {
+      const team = teamsByFifa.get(t.fifa);
+      return `<div class="tp-row ${t.qualifies ? 'q' : 'out'}">
+        <span class="tp-rank">${i + 1}</span>
+        <img src="${team ? team.flag : ''}" alt="">
+        <span class="tp-name">${team ? team.name : t.fifa}</span>
+        <span class="tp-grp">${t.group}</span>
+        <span class="tp-num">${t.gp}</span>
+        <span class="tp-num">${t.gd > 0 ? '+' : ''}${t.gd}</span>
+        <span class="tp-pts">${t.pts}</span></div>`;
+    };
+    const rows = thirdPlaceRanking.map((t, i) =>
+      row(t, i) + (i === 7 ? '<div class="tp-cut">qualification line · top 8 reach the Round of 32</div>' : '')).join('');
+    el.innerHTML = `<button class="x" aria-label="Close">×</button>
+      <div class="h2h-title">🥉 Best third-placed teams</div>
+      <div class="tp-sub">The 12 group third-placed teams, ranked by points → goal difference. The top 8 join the
+        12 group winners and 12 runners-up in the Round of 32.</div>
+      <div class="tp-head"><span>#</span><span></span><span class="tp-nm">Team</span>
+        <span>GRP</span><span>GP</span><span>GD</span><span>PTS</span></div>
+      ${rows}
+      <div class="tp-foot">Computed live from FIFA's official match feed. Exact order of tied teams may differ from
+        FIFA's further tiebreakers (goals scored, disciplinary points, drawing of lots).</div>`;
+  }
+  function openThird() { renderThirdPlace(); closeH2H(); document.getElementById('third').classList.add('open'); }
+  function closeThird() { const el = document.getElementById('third'); if (el) el.classList.remove('open'); }
+
   async function boot() {
     isDark = autoTheme();
     document.body.classList.toggle('theme-dark', isDark);
@@ -1183,13 +1296,15 @@
       const b = e.target.closest('button'); if (!b) return; setView(b.dataset.view);
     });
     document.getElementById('bracket-view').addEventListener('click', e => {
+      if (e.target.closest('#thirdChip')) { openThird(); return; }
       const md = e.target.closest('.mdate.has-h2h');
-      if (md) { const g = gamesById.get(md.dataset.h2h); if (g) showH2H(g.homeId, g.awayId); return; }
+      if (md) { const g = gamesById.get(md.dataset.h2h); if (g) { closeThird(); showH2H(g.homeId, g.awayId); } return; }
       const el = e.target.closest('.mteam.pick');
-      if (el) { highlightNation(el.dataset.team); closeH2H(); return; }
-      closeH2H();   // clicking the bracket backdrop dismisses the card
+      if (el) { highlightNation(el.dataset.team); closeH2H(); closeThird(); return; }
+      closeH2H(); closeThird();   // clicking the bracket backdrop dismisses the cards
     });
     document.getElementById('h2h').addEventListener('click', e => { if (e.target.closest('.x')) closeH2H(); });
+    document.getElementById('third').addEventListener('click', e => { if (e.target.closest('.x')) closeThird(); });
     const board = document.getElementById('scorer-board');
     board.addEventListener('click', e => { const el = e.target.closest('.lb-row'); if (el) selectScorerNation(el.dataset.team); });
     board.addEventListener('keydown', e => { const el = e.target.closest('.lb-row'); if (el && (e.key==='Enter'||e.key===' ')) { e.preventDefault(); selectScorerNation(el.dataset.team); } });
@@ -1202,6 +1317,7 @@
       if (selectedId && teamsById.has(selectedId) && document.getElementById('detail').classList.contains('open'))
         renderDetail(teamsById.get(selectedId));
       if (document.body.classList.contains('view-bracket')) buildBracket();
+      if (document.getElementById('third').classList.contains('open')) renderThirdPlace();
       if (document.body.classList.contains('view-scorers')) {
         buildLeaderboard();
         if (selectedId && document.getElementById('scorer-nation').classList.contains('open')) renderNationScorers(selectedId);
