@@ -197,7 +197,7 @@
   /* Bracket view */
   #bracket-view{display:none;position:absolute;inset:0;z-index:500;overflow:auto;background:transparent;padding:16px 20px 30px;}
   body.view-bracket #sidebar{display:none;}
-  body.view-bracket #detail{display:none !important;}
+  body.view-bracket #detail:not(.open){display:none !important;}   /* show the nation panel when a bracket team is clicked */
   body.view-bracket #bracket-view{display:block;}
   /* greyed world map shows through as the bracket backdrop */
   body.view-bracket .leaflet-tile-pane{filter:grayscale(1) brightness(1.06) opacity(0.5);}
@@ -1018,7 +1018,7 @@
       <div class="bk-third"><div class="lab">Match for third place</div>${matchBox(BK_THIRD)}</div></div>`;
     document.getElementById('bracket-view').innerHTML =
       `<h2 class="bk-title">Knockout bracket
-        <span class="bk-sub">· bold = winner · click a team for the map · click ⚔ H2H for head-to-head</span>
+        <span class="bk-sub">· bold = winner · click a team for its details · click ⚔ H2H for head-to-head</span>
         <button class="bk-3rd-chip" id="thirdChip">🥉 3rd-place race</button></h2>
       <div class="bracket">${bkHalf('left',BK_LEFT)}${centre}${bkHalf('right',BK_RIGHT)}</div>`;
     drawConnectors();
@@ -1161,6 +1161,15 @@
     if (layer) { layer.setStyle(CONFIG.style.selected); layer.bringToFront(); }
     document.querySelectorAll('#bracket-view .mteam.bkactive').forEach(e => e.classList.remove('bkactive'));
     document.querySelectorAll('#bracket-view .mteam.pick[data-team="'+id+'"]').forEach(e => e.classList.add('bkactive'));
+  }
+
+  // Bracket: clicking a team highlights it on the greyed map AND opens the same nation panel
+  // as the map view (stats / squad / fixtures). No map fly-to — the map is just a backdrop here.
+  function bracketSelectTeam(id) {
+    const rec = teamsById.get(String(id)); if (!rec) return;
+    selectedId = String(id);
+    highlightNation(id);
+    renderDetail(rec);          // populates #detail and adds .open
   }
 
   // Head-to-head card for a knockout match where both nations are placed.
@@ -1348,7 +1357,7 @@
       const md = e.target.closest('.mdate.has-h2h');
       if (md) { const g = gamesById.get(md.dataset.h2h); if (g) { closeThird(); showH2H(g.homeId, g.awayId); } return; }
       const el = e.target.closest('.mteam.pick');
-      if (el) { highlightNation(el.dataset.team); closeH2H(); closeThird(); return; }
+      if (el) { closeH2H(); closeThird(); bracketSelectTeam(el.dataset.team); return; }
       closeH2H(); closeThird();   // clicking the bracket backdrop dismisses the cards
     });
     document.getElementById('h2h').addEventListener('click', e => { if (e.target.closest('.x')) closeH2H(); });
