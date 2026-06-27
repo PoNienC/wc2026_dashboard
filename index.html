@@ -40,6 +40,7 @@
   body.theme-dark .bar-track, body.theme-dark .lb-bar{background:#26324c;}
   body.theme-dark .mteam+.mteam{border-top-color:#1e2840;}
   body.theme-dark .tag{background:#1e2840;color:#aeb9cb;}
+  body.theme-dark .wage-ind{color:#fbbf24;}
   body.theme-dark .empty{background:#0f1830;border-color:#2a3650;}
   body.theme-dark .d-head .x{background:#1e2840;color:var(--muted);}
   body.theme-dark .leaflet-bar a{background:#161f33;color:#e6edf6;border-color:#2a3650;}
@@ -147,11 +148,24 @@
   /* Squad list (detail panel) */
   #dSquad{margin-bottom:6px;}
   .sq-grp{font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);font-weight:700;margin:9px 0 2px;}
-  .sq-row{display:grid;grid-template-columns:18px minmax(0,1.25fr) minmax(0,1fr);gap:9px;align-items:baseline;padding:3px 1px;font-size:12.5px;}
+  .sq-row{display:grid;grid-template-columns:16px minmax(0,1.15fr) minmax(0,0.82fr) 56px;gap:8px;align-items:baseline;padding:3px 1px;font-size:12.5px;}
   .sq-row .sq-no{color:var(--muted);font-size:10.5px;text-align:right;}
   .sq-row .sq-name{color:var(--ink);font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-  .sq-row .sq-club{color:var(--muted);font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:right;}
+  .sq-row .sq-club{color:var(--muted);font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
   .sq-empty{font-size:12px;color:var(--muted);padding:4px 0;}
+  /* Salary layer (confidence-tiered) */
+  .sq-pay{font-size:11px;text-align:right;font-variant-numeric:tabular-nums;text-decoration:none;color:var(--ink);white-space:nowrap;}
+  .sq-pay:hover{text-decoration:underline;}
+  .sq-pay.none{color:var(--muted);}
+  .cdot{display:inline-block;width:7px;height:7px;border-radius:50%;vertical-align:middle;}
+  .sq-pay .cdot{width:6px;height:6px;margin-right:3px;}
+  .cdot.a{background:#16a34a;}                       /* Tier A — official/Capology */
+  .cdot.b{background:transparent;box-shadow:inset 0 0 0 1.5px #d97706;}  /* Tier B — estimated */
+  .wage-head{font-size:15px;font-weight:700;color:var(--ink);margin:2px 0;}
+  .wage-head .wmut{font-size:11.5px;font-weight:500;color:var(--muted);}
+  .wage-note{font-size:11px;color:var(--muted);font-style:italic;margin:1px 0 2px;}
+  .wage-ind{font-size:10.5px;font-weight:600;font-style:italic;color:#b45309;margin:1px 0 3px;}
+  .wage-src{font-size:9.5px;color:var(--muted);margin:3px 0 2px;display:flex;align-items:center;gap:4px;flex-wrap:wrap;}
   .fixtures{display:flex;flex-direction:column;gap:6px;}
   .fx{display:grid;grid-template-columns:30px 1fr auto;gap:8px;align-items:center;font-size:12px;
       border:1px solid var(--line);border-radius:8px;padding:7px 9px;}
@@ -390,6 +404,7 @@
           <div class="funfact" id="dFact"></div>
           <div class="d-sec">Where the 26-man squad plays <span class="tag">by club country</span></div>
           <div id="dChart"></div>
+          <div id="dWages"></div>
           <div class="d-sec" style="margin-top:6px">Squad <span class="tag" id="dCoach"></span></div>
           <div id="dSquad"></div>
           <div class="d-sec" style="margin-top:6px">Group fixtures</div>
@@ -434,6 +449,9 @@
     // 26-man squads (player · position · club) + head coach, parsed from Wikipedia.
     // Regenerate with scripts/build_squads.py.
     squads: 'squads.json',
+    // Confidence-tiered estimated salaries {meta, teams:{FC:{priced,total,tierA,tierB,players}}}.
+    // Regenerate with scripts/build_salaries.py.
+    salaries: 'salaries.json',
     // FIFA/Coca-Cola World Ranking — api.fifa.com IS CORS-open, so the ranking loads live.
     fifaApi: 'https://api.fifa.com/api/v3',
     rankTtlMs: 24 * 60 * 60 * 1000,   // ranking changes ~monthly — cache a day in localStorage
@@ -548,6 +566,7 @@
   let topScorers = [];              // global Golden Boot leaderboard [{name,goals,teamId}]
   let thirdPlaceRanking = [];       // best third-placed teams (computed from FIFA group matches)
   let squadsData = null;            // { fifa: {coach, players:[{no,n,p,c,cn}]} } — lazy-loaded squads.json
+  let salariesData = null;          // {meta, teams:{FC:{priced,total,tierA,tierB,players,byName}}} — salaries.json
   const scorersByTeam = new Map();  // teamId -> [{name,goals}] sorted desc
   const teamsByIso3 = new Map();    // iso3 -> [team records] (England=ENG, Scotland=SCT home-nation polygons)
   const gamesByTeam = new Map();    // id -> [game]
@@ -866,21 +885,46 @@
     try { squadsData = await (await fetch(CONFIG.squads)).json(); }
     catch (e) { console.warn('Squads load failed', e); squadsData = {}; }
   }
+
+  // Lazy-load the confidence-tiered salaries, once; index each team's players by name.
+  async function loadSalaries() {
+    if (salariesData) return;
+    try {
+      const d = await (await fetch(CONFIG.salaries)).json();
+      for (const fc in d.teams) {
+        const t = d.teams[fc]; t.byName = {};
+        for (const p of t.players) t.byName[p.n] = p;
+      }
+      salariesData = d;
+    } catch (e) { console.warn('Salaries load failed', e); salariesData = { teams: {} }; }
+  }
+  const fmtEur = (v) => v >= 1e6 ? '€' + (v / 1e6).toFixed(1) + 'm'
+    : v >= 1e3 ? '€' + Math.round(v / 1e3) + 'k' : '€' + v;
   const SQ_GROUPS = [['GK','Goalkeepers'],['DF','Defenders'],['MF','Midfielders'],['FW','Forwards']];
   function renderSquadSection(rec) {
     const box = document.getElementById('dSquad'), coachTag = document.getElementById('dCoach');
     const sq = squadsData && squadsData[rec.fifa];
+    const stillHere = () => selectedId === rec.id && document.getElementById('detail').classList.contains('open');
     if (!sq) {
       coachTag.textContent = '';
       box.innerHTML = `<div class="sq-empty">${squadsData ? 'Squad not available.' : 'Loading squad…'}</div>`;
-      if (!squadsData) loadSquads().then(() => {           // first open — fetch, then repaint if still selected
-        if (selectedId === rec.id && document.getElementById('detail').classList.contains('open')) renderSquadSection(rec);
+      if (!squadsData) Promise.all([loadSquads(), loadSalaries()]).then(() => {   // first open — fetch, then repaint
+        if (stillHere()) renderSquadSection(rec);
       });
       return;
     }
     coachTag.textContent = sq.coach ? 'Coach: ' + sq.coach : '';
+    if (!salariesData) loadSalaries().then(() => { if (stillHere()) renderSquadSection(rec); });  // wages fill in on load
+    const sal = salariesData && salariesData.teams && salariesData.teams[rec.fifa];
+    const pay = (p) => {                                  // per-player estimated wage + confidence dot
+      const e = sal && sal.byName[p.n];
+      if (!e) return `<span class="sq-pay none">N/A</span>`;
+      const off = e.source_name === 'MLSPA' ? ' (official)' : '';
+      return `<a class="sq-pay" href="${e.source_url}" target="_blank" rel="noopener"`
+        + ` title="${e.source_name} · Tier ${e.confidence}${off}"><i class="cdot ${(e.confidence || '').toLowerCase()}"></i>${fmtEur(e.eur)}</a>`;
+    };
     const row = (p) => `<div class="sq-row"><span class="sq-no">${p.no || ''}</span>
-      <span class="sq-name">${p.n}</span><span class="sq-club">${p.c || ''}</span></div>`;
+      <span class="sq-name">${p.n}</span><span class="sq-club">${p.c || ''}</span>${pay(p)}</div>`;
     let html = '';
     for (const [pos, label] of SQ_GROUPS) {
       const ps = sq.players.filter(p => p.p === pos);
@@ -889,6 +933,29 @@
     const other = sq.players.filter(p => !SQ_GROUPS.some(g => g[0] === p.p));
     if (other.length) html += `<div class="sq-grp">Squad</div>` + other.map(row).join('');
     box.innerHTML = html || `<div class="sq-empty">Squad not available.</div>`;
+  }
+
+  // Team wage-bill headline (est.) — combined/avg priced wages + honest coverage + source key.
+  function renderWages(rec) {
+    const el = document.getElementById('dWages');
+    const sal = salariesData && salariesData.teams && salariesData.teams[rec.fifa];
+    if (!sal) {                                            // not loaded yet (or no data) — fill in on load
+      el.innerHTML = '';
+      if (!salariesData) loadSalaries().then(() => {
+        if (selectedId === rec.id && document.getElementById('detail').classList.contains('open')) renderWages(rec);
+      });
+      return;
+    }
+    const avg = sal.priced ? Math.round(sal.total / sal.priced) : 0;
+    const low = sal.priced < 8;
+    el.innerHTML =
+      `<div class="d-sec" style="margin-top:6px">💰 Squad wages</div>`
+      + (sal.priced
+        ? `<div class="wage-head">${fmtEur(sal.total)} <span class="wmut">total · ${fmtEur(avg)} avg (priced)</span></div>`
+          + `<div class="wage-ind">≈ Indicative estimates only — not official figures.</div>`
+        : `<div class="wage-note">No public wage data for this squad's leagues.</div>`)
+      + (low && sal.priced ? `<div class="wage-note">Most of this squad plays in leagues with no public wage data.</div>` : '')
+      + `<div class="wage-src">Wage source: <i class="cdot a"></i> MLSPA / Capology · <i class="cdot b"></i> FootyStats / media</div>`;
   }
 
   function renderDetail(rec) {
@@ -931,6 +998,7 @@
         Plug a squad source (e.g. API-Football <code>/players/squads</code>) into <code>SQUAD_LEAGUES['${rec.fifa}']</code>.</div>`;
     }
 
+    renderWages(rec);
     renderSquadSection(rec);
 
     // fixtures
@@ -948,7 +1016,8 @@
     }).join('') : `<div class="empty">No fixtures available${isLive?'':' (static fallback — start the live API for fixtures)'}.</div>`;
 
     document.getElementById('dFoot').innerHTML =
-      `Standings &amp; fixtures: live · worldcup26.ir. Squad leagues: Wikipedia 2026 WC squads (by club country). Population: Natural Earth.`;
+      `Standings &amp; fixtures: live · worldcup26.ir. Squad leagues: Wikipedia 2026 WC squads (by club country). `
+      + `Wages (indicative est.): MLSPA (official) · Capology · FootyStats · media reports. Population: Natural Earth.`;
     document.getElementById('detail').classList.add('open');
   }
   const ordinal = (n) => n+({1:'st',2:'nd',3:'rd'}[n]||'th');
@@ -1336,6 +1405,7 @@
         renderDetail(teamsById.get(selectedId));
     });
     loadSquads();                          // warm the squad list (shown in the detail panel)
+    loadSalaries();                        // warm the estimated wages shown alongside the squad
     await loadBoundaries();
 
     document.getElementById('search').addEventListener('input', e => filterSidebar(e.target.value));
