@@ -47,7 +47,7 @@ WC_MATCHES = ("https://api.fifa.com/api/v3/calendar/matches"
 BFF = ("https://inside.fifa.com/api/data-centre/head-to-head/head-to-head"
        "?teamA={a}&teamB={b}&language=en")
 THROTTLE_S = 0.4          # be gentle with the bot-walled endpoint
-RETRIES = 4
+RETRIES = 6               # inside.fifa.com 403s sporadically under load — retry with backoff
 
 # FIFA national-team IDs, keyed by FIFA code — regenerate with build_fifa_team_ids.py.
 # Kept in sync with the FIFA_TEAM_IDS const in index.html (the BFF needs numeric ids).
@@ -172,25 +172,36 @@ def main() -> None:
 
     out_path = pathlib.Path(__file__).resolve().parent.parent / "h2h.json"
     data = json.loads(out_path.read_text()) if out_path.exists() else {}
+    existing = set(data)          # pairs already baked before this run
 
     ok = err = 0
+    missing = []                  # determined ties we end up with NO record for (new + failed)
     for i, (a, b) in enumerate(pairs, 1):
+        key = f"{a}|{b}"
         url = BFF.format(a=FIFA_TEAM_IDS[a], b=FIFA_TEAM_IDS[b])
         try:
-            rec = compact_record(a, b, get_json(url))
-            data[f"{a}|{b}"] = rec
+            data[key] = compact_record(a, b, get_json(url))
             ok += 1
-            print(f"   [{i}/{len(pairs)}] {a}-{b}: played {rec['p']}", file=sys.stderr)
+            print(f"   [{i}/{len(pairs)}] {a}-{b}: played {data[key]['p']}", file=sys.stderr)
         except Exception as e:                              # noqa: BLE001 - log + continue
             err += 1
+            if key not in existing:                          # transient blip on an already-baked pair is fine
+                missing.append(key)
             print(f"   [{i}/{len(pairs)}] {a}-{b}: ERROR {e}", file=sys.stderr)
         time.sleep(THROTTLE_S)
 
     out_path.write_text(json.dumps(data, ensure_ascii=False, sort_keys=True, separators=(",", ":")) + "\n")
     print(f"// wrote {out_path} — {len(data)} pair(s) total ({ok} baked, {err} errored)",
           file=sys.stderr)
-    if err:
-        sys.exit(1)   # fail loud so the scheduled job surfaces problems
+    # Fail loud only on a REAL problem, not a transient blip. inside.fifa.com is bot-walled and
+    # occasionally 403s a single pair under load; that pair keeps its prior record and the next
+    # scheduled run re-bakes it, so it shouldn't fail the job (and email). Surface only:
+    #   · a total outage (every pair errored), or
+    #   · a determined tie we have NO record for at all (a genuine coverage gap).
+    if pairs and ok == 0:
+        sys.exit(f"FAILED: every pair errored ({err}/{len(pairs)}) — likely a FIFA outage or IP block.")
+    if missing:
+        sys.exit(f"FAILED: {len(missing)} determined tie(s) have no baked record yet: {missing}")
 
 
 if __name__ == "__main__":
