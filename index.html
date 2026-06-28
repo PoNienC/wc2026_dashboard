@@ -1217,7 +1217,6 @@
     closeH2H(); closeThird();
     if (v==='bracket') {
       buildBracket();
-      openThird();   // surface the 3rd-place race card by default on entering the bracket
       if (map) { map.invalidateSize(); map.setView([20,0], 2, { animate:false }); }
     } else if (v==='scorers') {
       buildLeaderboard();
@@ -1458,6 +1457,8 @@
         if (selectedId && document.getElementById('scorer-nation').classList.contains('open')) renderNationScorers(selectedId);
       }
     }, 60000);
+
+    setView('bracket');   // land on the knockout bracket by default (data is loaded by now)
 
     trackVisit();   // increment + show the live page-view count (once per load)
   }
