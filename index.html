@@ -245,6 +245,7 @@
   .mdate.has-h2h{cursor:pointer;}
   .mdate.has-h2h:hover{color:var(--selected);}
   .mdate .h2h-hint{float:right;font-weight:700;letter-spacing:.02em;opacity:.8;}
+  .mdate .mvenue{display:block;clear:both;margin-top:1px;font-size:8.5px;opacity:.92;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
   #h2h{display:none;position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:800;width:min(440px,92vw);
        background:var(--panel);border:1px solid var(--line);border-radius:14px;box-shadow:0 18px 60px rgba(0,0,0,.45);padding:18px 20px 20px;}
   #h2h.open{display:block;}
@@ -630,6 +631,10 @@
         if (hs != null && as != null) { g.hs = hs; g.as = as; g.finished = true; }
         const hp = m.HomeTeamPenaltyScore, ap = m.AwayTeamPenaltyScore;
         if (hp != null && ap != null) { g.hp = hp; g.ap = ap; }   // penalty-shootout scoreline
+        if (m.Date) g.ko = m.Date;                                 // UTC kickoff — localised in the browser
+        const st = m.Stadium || {};
+        const venue = [locName(st.Name), locName(st.CityName)].filter(Boolean).join(', ');
+        if (venue) g.venue = venue;
         gamesById.set(id, g);
       }
       thirdPlaceRanking = computeThirdPlace(results);       // the best-third-placed-teams card
@@ -1070,6 +1075,22 @@
     101:['W97','W98'], 102:['W99','W100'], 104:['W101','W102'], 103:['L101','L102'],
   };
 
+  // FIFA stores names as [{Locale, Description}] — pick the en-GB (or first) description.
+  const locName = (arr) => Array.isArray(arr) ? ((arr.find(x => x && x.Locale === 'en-GB') || arr[0] || {}).Description || '') : '';
+  // Kickoff (FIFA's UTC ISO) rendered in the VIEWER's local timezone — "29 Jun · 21:30".
+  function koLabel(iso) {
+    if (!iso) return '';
+    const d = new Date(iso); if (isNaN(d)) return '';
+    return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) + ' · '
+         + d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+  }
+  // The viewer's local timezone abbreviation (e.g. BST, EDT) — shown once in the bracket subtitle.
+  function viewerTz() {
+    try {
+      return (new Intl.DateTimeFormat('en-GB', { hour: '2-digit', timeZoneName: 'short' })
+        .formatToParts(new Date()).find(p => p.type === 'timeZoneName') || {}).value || '';
+    } catch (e) { return ''; }
+  }
   function bkSlot(teamId, feeder, score, pen, isWin, finished) {
     const t = teamsById.get(String(teamId));
     if (t) {
@@ -1086,10 +1107,11 @@
     const shoot = fin && hp != null && ap != null;          // tie decided on penalties
     const homeWin = fin && (hs > as || (shoot && hp > ap)); // shootout winner advances even on a drawn scoreline
     const awayWin = fin && (as > hs || (shoot && ap > hp));
-    const date = g ? dateLabel(g.date) : '';
+    const when = (g && koLabel(g.ko)) || (g ? dateLabel(g.date) : '') || ('M' + id);
+    const venue = g && g.venue ? g.venue : '';
     const both = g && teamsById.has(String(g.homeId)) && teamsById.has(String(g.awayId));  // both teams placed → head-to-head
     return `<div class="mbox ${fin?'fin':''}" data-mid="${id}">
-      <div class="mdate${both?' has-h2h':''}"${both?` data-h2h="${id}"`:''}>M${id}${date?' · '+date:''}${shoot?' · pens':''}${both?'<span class="h2h-hint">⚔ H2H</span>':''}</div>
+      <div class="mdate${both?' has-h2h':''}"${both?` data-h2h="${id}"`:''}>${both?'<span class="h2h-hint">⚔ H2H</span>':''}${when}${shoot?' · pens':''}${venue?`<span class="mvenue">📍 ${venue}</span>`:''}</div>
       ${bkSlot(g&&g.homeId, fh, hs, shoot?hp:null, homeWin, fin)}
       ${bkSlot(g&&g.awayId, fa, as, shoot?ap:null, awayWin, fin)}</div>`;
   }
@@ -1101,9 +1123,10 @@
     const centre = `<div class="bk-center"><div class="bk-h">Final</div>
       <div class="bk-final-box">${matchBox(BK_FINAL)}</div>
       <div class="bk-third"><div class="lab">Match for third place</div>${matchBox(BK_THIRD)}</div></div>`;
+    const tz = viewerTz();
     document.getElementById('bracket-view').innerHTML =
       `<h2 class="bk-title">Knockout bracket
-        <span class="bk-sub">· bold = winner · click a team for its details · click ⚔ H2H for head-to-head</span>
+        <span class="bk-sub">· bold = winner · click a team for its details · click ⚔ H2H · kick-offs in your local time${tz?` (${tz})`:''}</span>
         <button class="bk-3rd-chip" id="thirdChip">🥉 3rd-place race</button></h2>
       <div class="bracket">${bkHalf('left',BK_LEFT)}${centre}${bkHalf('right',BK_RIGHT)}</div>`;
     drawConnectors();
