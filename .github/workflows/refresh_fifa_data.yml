@@ -12,13 +12,18 @@ name: Refresh FIFA data
 
 on:
   schedule:
-    # ~30 min after each WC2026 knockout match-end window (kickoffs run 16:00-03:00 UTC, so
-    # matches end ~18:00-05:30 UTC; a match + extra time is ~2.5h). commit-if-changed means a
-    # too-early run just no-ops and the next one catches it. (Scheduled runs fire on main only.)
-    - cron: '0 20 * * *'     # after afternoon matches (16:00-17:30 kickoffs)
-    - cron: '30 23 * * *'    # after early-evening matches (18:00-21:00 kickoffs)
-    - cron: '0 3 * * *'      # after late-evening matches (21:00-00:30 kickoffs)
-    - cron: '0 6 * * *'      # after late-night matches incl. extra time (01:00-03:00 kickoffs)
+    # Every 2h across the WC2026 knockout match-end window. Kickoffs run 16:00-03:00 UTC, so
+    # matches end ~18:00-06:00 UTC (a match + extra time + penalties + FIFA processing is ~2.5-3h).
+    # Baking every 2h means any newly-set tie (and its winner's next-round H2H) is picked up within
+    # ~2h of the final whistle. commit-if-changed means too-early/no-change runs just no-op.
+    # (Scheduled runs fire on main only.) Revert to ~4x/day once the knockouts finish.
+    - cron: '0 18 * * *'     # after ~16:00 kickoffs
+    - cron: '0 20 * * *'     # after ~17:00-18:00 kickoffs
+    - cron: '0 22 * * *'     # after ~19:00-20:00 kickoffs
+    - cron: '0 0 * * *'      # after ~21:00-22:00 kickoffs
+    - cron: '0 2 * * *'      # after ~23:00-00:00 kickoffs
+    - cron: '0 4 * * *'      # after ~01:00-01:30 kickoffs (incl. extra time)
+    - cron: '0 6 * * *'      # after ~03:00 kickoffs (incl. extra time + penalties)
   workflow_dispatch: {}
   push:
     paths:

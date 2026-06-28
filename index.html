@@ -318,6 +318,7 @@
   .mteam .mc{font-weight:600;}
   .mteam.tbd .mlabel{color:#9aa3af;font-size:11px;}
   .mteam .ms{margin-left:auto;font-variant-numeric:tabular-nums;font-weight:700;color:#374151;}
+  .mteam .ms .pens{font-size:9px;font-weight:600;opacity:.7;margin-left:1px;}
   .mteam.win .mc,.mteam.win .ms{color:var(--confirmed);}
   .bk-final-box .mbox{border-color:var(--selected);box-shadow:0 6px 18px rgba(245,158,11,.20);}
   .bk-final-box .mdate{background:#fff7ec;color:#b45309;font-weight:700;}
@@ -627,6 +628,8 @@
         if (at) g.awayId = at.id;
         const hs = (m.Home || {}).Score, as = (m.Away || {}).Score;
         if (hs != null && as != null) { g.hs = hs; g.as = as; g.finished = true; }
+        const hp = m.HomeTeamPenaltyScore, ap = m.AwayTeamPenaltyScore;
+        if (hp != null && ap != null) { g.hp = hp; g.ap = ap; }   // penalty-shootout scoreline
         gamesById.set(id, g);
       }
       thirdPlaceRanking = computeThirdPlace(results);       // the best-third-placed-teams card
@@ -1067,21 +1070,28 @@
     101:['W97','W98'], 102:['W99','W100'], 104:['W101','W102'], 103:['L101','L102'],
   };
 
-  function bkSlot(teamId, feeder, score, isWin, finished) {
+  function bkSlot(teamId, feeder, score, pen, isWin, finished) {
     const t = teamsById.get(String(teamId));
-    if (t) return `<div class="mteam pick ${isWin?'win':''}" data-team="${t.id}" title="${t.name}">
-      <img src="${t.flag}" alt=""><span class="mc">${t.fifa}</span><span class="ms">${finished?score:''}</span></div>`;
+    if (t) {
+      const sc = finished ? (pen != null ? `${score} <span class="pens">(${pen})</span>` : `${score}`) : '';
+      return `<div class="mteam pick ${isWin?'win':''}" data-team="${t.id}" title="${t.name}">
+        <img src="${t.flag}" alt=""><span class="mc">${t.fifa}</span><span class="ms">${sc}</span></div>`;
+    }
     return `<div class="mteam tbd"><span class="mlabel">${feeder}</span><span class="ms"></span></div>`;
   }
   function matchBox(id) {
     const g = gamesById.get(String(id)); const [fh,fa] = FEEDERS[id] || ['',''];
     const fin = g ? g.finished : false; const hs = g?g.hs:'', as = g?g.as:'';
+    const hp = (g && g.hp != null) ? g.hp : null, ap = (g && g.ap != null) ? g.ap : null;
+    const shoot = fin && hp != null && ap != null;          // tie decided on penalties
+    const homeWin = fin && (hs > as || (shoot && hp > ap)); // shootout winner advances even on a drawn scoreline
+    const awayWin = fin && (as > hs || (shoot && ap > hp));
     const date = g ? dateLabel(g.date) : '';
     const both = g && teamsById.has(String(g.homeId)) && teamsById.has(String(g.awayId));  // both teams placed → head-to-head
     return `<div class="mbox ${fin?'fin':''}" data-mid="${id}">
-      <div class="mdate${both?' has-h2h':''}"${both?` data-h2h="${id}"`:''}>M${id}${date?' · '+date:''}${both?'<span class="h2h-hint">⚔ H2H</span>':''}</div>
-      ${bkSlot(g&&g.homeId, fh, hs, fin&&hs>as, fin)}
-      ${bkSlot(g&&g.awayId, fa, as, fin&&as>hs, fin)}</div>`;
+      <div class="mdate${both?' has-h2h':''}"${both?` data-h2h="${id}"`:''}>M${id}${date?' · '+date:''}${shoot?' · pens':''}${both?'<span class="h2h-hint">⚔ H2H</span>':''}</div>
+      ${bkSlot(g&&g.homeId, fh, hs, shoot?hp:null, homeWin, fin)}
+      ${bkSlot(g&&g.awayId, fa, as, shoot?ap:null, awayWin, fin)}</div>`;
   }
   const bkCol = (round, ids) => `<div class="bk-col"><div class="bk-h">${ROUND_H[round]}</div>
     <div class="bk-matches">${ids.map(matchBox).join('')}</div></div>`;
