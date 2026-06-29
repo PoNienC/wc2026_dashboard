@@ -1271,13 +1271,21 @@
     document.querySelectorAll('#bracket-view .mteam.pick[data-team="'+id+'"]').forEach(e => e.classList.add('bkactive'));
   }
 
-  // Bracket: clicking a team highlights it on the greyed map AND opens the same nation panel
-  // as the map view (stats / squad / fixtures). No map fly-to — the map is just a backdrop here.
+  // Bracket: clicking a team highlights it, opens the same nation panel as the map view
+  // (stats / squad / fixtures), AND zooms the greyed backdrop map to that nation.
   function bracketSelectTeam(id) {
     const rec = teamsById.get(String(id)); if (!rec) return;
     selectedId = String(id);
     highlightNation(id);
     renderDetail(rec);          // populates #detail and adds .open
+    const layer = layerByIso3.get(rec.iso3);   // zoom the greyed backdrop to the clicked nation
+    if (map && layer) {
+      const w = map.getSize().x;
+      const rightPad = Math.round(Math.min(310, Math.max(20, w * 0.38)));  // clear the detail panel
+      const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      map.flyToBounds(mainBoundsByIso3.get(rec.iso3) || layer.getBounds(),
+        { paddingTopLeft:[28,28], paddingBottomRight:[rightPad,28], maxZoom:6, duration:1.1, animate:!reduce });
+    }
   }
 
   // Head-to-head card for a knockout match where both nations are placed.
