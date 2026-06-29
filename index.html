@@ -216,7 +216,9 @@
   /* greyed world map shows through as the bracket backdrop */
   body.view-bracket .leaflet-tile-pane{filter:grayscale(1) brightness(1.06) opacity(0.5);}
   body.view-bracket .map-note{display:none;}
-  body.view-bracket .leaflet-control-zoom{display:none;}
+  /* Keep the +/- zoom control in bracket view so the backdrop map can be zoomed back out;
+     move it clear of the bracket title to the lower-left, above the bracket overlay. */
+  body.view-bracket .leaflet-top.leaflet-left{top:auto;bottom:6px;z-index:1000;}
   /* Scorers view: the nation panel (left:10, width:320) covers the map's left edge,
      so push the zoom control clear of it instead of letting it sit on the flag. */
   body.view-scorers .leaflet-top.leaflet-left{left:340px;}
@@ -1477,6 +1479,7 @@
       const el = e.target.closest('.mteam.pick');
       if (el) { closeH2H(); closeThird(); bracketSelectTeam(el.dataset.team); return; }
       closeH2H(); closeThird();   // clicking the bracket backdrop dismisses the cards
+      if (map && map.getZoom() > 2) map.flyTo([20, 0], 2, { duration: 0.8 });   // ...and zooms the map back out
     });
     document.getElementById('h2h').addEventListener('click', e => { if (e.target.closest('.x')) closeH2H(); });
     document.getElementById('third').addEventListener('click', e => { if (e.target.closest('.x')) closeThird(); });
