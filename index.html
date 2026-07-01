@@ -236,6 +236,15 @@
   .bk-matches{flex:1;display:flex;flex-direction:column;justify-content:space-around;gap:8px;}
   .bk-center{display:flex;flex-direction:column;justify-content:center;align-items:stretch;min-width:166px;}
   .mbox{background:var(--panel);border:1px solid var(--line);border-radius:8px;box-shadow:var(--shadow);overflow:hidden;position:relative;z-index:1;}
+  /* Current / next match — light-yellow "championship" frame; the live one also gets a rolling ball. */
+  .mbox.next, .mbox.live{border-color:#facc15;box-shadow:0 0 0 2px rgba(250,204,21,.55),0 2px 12px rgba(250,204,21,.35);z-index:2;}
+  .mbox.live{overflow:visible;}
+  .mdate .mlive{color:#dc2626;font-weight:800;letter-spacing:.03em;margin-right:5px;}
+  body.theme-dark .mdate .mlive{color:#f87171;}
+  .mball{position:absolute;bottom:-11px;left:2px;font-size:13px;line-height:1;z-index:5;pointer-events:none;
+         filter:drop-shadow(0 1px 1px rgba(0,0,0,.35));animation:mball-roll 2.6s linear infinite;}
+  @keyframes mball-roll{0%{left:2px;transform:rotate(0)}100%{left:calc(100% - 15px);transform:rotate(1080deg)}}
+  @media (prefers-reduced-motion:reduce){.mball{animation:none;}}
   /* In the bracket, boxes are ~50% transparent so the highlighted nation shows through the map (text stays opaque) */
   body.view-bracket .mbox{background:rgba(255,255,255,.5);}
   body.view-bracket .mdate{background:rgba(245,247,250,.4);}
@@ -634,6 +643,7 @@
         const hp = m.HomeTeamPenaltyScore, ap = m.AwayTeamPenaltyScore;
         if (hp != null && ap != null) { g.hp = hp; g.ap = ap; }   // penalty-shootout scoreline
         if (m.Date) g.ko = m.Date;                                 // UTC kickoff — localised in the browser
+        g.status = m.MatchStatus;                                  // 0 finished · 1 scheduled · 3 live
         const st = m.Stadium || {};
         const venue = [locName(st.Name), locName(st.CityName)].filter(Boolean).join(', ');
         if (venue) g.venue = venue;
@@ -1102,6 +1112,20 @@
     }
     return `<div class="mteam tbd"><span class="mlabel">${feeder}</span><span class="ms"></span></div>`;
   }
+  // Which knockout match is live now / up next → highlighted (light-yellow frame; live gets a rolling ball).
+  let bkLive = new Set(), bkNext = null;
+  function computeBracketStatus() {
+    bkLive = new Set(); bkNext = null;
+    const now = Date.now(); let nextT = Infinity;
+    for (let n = 73; n <= BK_FINAL; n++) {
+      const g = gamesById.get(String(n)); if (!g || g.finished) continue;
+      const koT = g.ko ? new Date(g.ko).getTime() : null;
+      const live = g.status === 3 || (koT && now >= koT && now < koT + 2.5 * 3600e3);  // in play now
+      if (live) bkLive.add(String(n));
+      else if (koT && koT >= now && koT < nextT) { nextT = koT; bkNext = String(n); }   // soonest upcoming
+    }
+  }
+
   function matchBox(id) {
     const g = gamesById.get(String(id)); const [fh,fa] = FEEDERS[id] || ['',''];
     const fin = g ? g.finished : false; const hs = g?g.hs:'', as = g?g.as:'';
@@ -1112,16 +1136,18 @@
     const when = (g && koLabel(g.ko)) || (g ? dateLabel(g.date) : '') || ('M' + id);
     const venue = g && g.venue ? g.venue : '';
     const both = g && teamsById.has(String(g.homeId)) && teamsById.has(String(g.awayId));  // both teams placed → head-to-head
-    return `<div class="mbox ${fin?'fin':''}" data-mid="${id}">
-      <div class="mdate${both?' has-h2h':''}"${both?` data-h2h="${id}"`:''}>${both?'<span class="h2h-hint">⚔ H2H</span>':''}${when}${shoot?' · pens':''}${venue?`<span class="mvenue">📍 ${venue}</span>`:''}</div>
+    const live = bkLive.has(String(id)), next = !live && bkNext === String(id);
+    return `<div class="mbox ${fin?'fin':''}${live?' live':''}${next?' next':''}" data-mid="${id}">
+      <div class="mdate${both?' has-h2h':''}"${both?` data-h2h="${id}"`:''}>${both?'<span class="h2h-hint">⚔ H2H</span>':''}${live?'<span class="mlive">● LIVE</span>':''}${when}${shoot?' · pens':''}${venue?`<span class="mvenue">📍 ${venue}</span>`:''}</div>
       ${bkSlot(g&&g.homeId, fh, hs, shoot?hp:null, homeWin, fin)}
-      ${bkSlot(g&&g.awayId, fa, as, shoot?ap:null, awayWin, fin)}</div>`;
+      ${bkSlot(g&&g.awayId, fa, as, shoot?ap:null, awayWin, fin)}${live?'<span class="mball" aria-hidden="true">⚽</span>':''}</div>`;
   }
   const bkCol = (round, ids) => `<div class="bk-col"><div class="bk-h">${ROUND_H[round]}</div>
     <div class="bk-matches">${ids.map(matchBox).join('')}</div></div>`;
   const bkHalf = (cls, d) => `<div class="bk-half ${cls}">${bkCol('r32',d.r32)}${bkCol('r16',d.r16)}${bkCol('qf',d.qf)}${bkCol('sf',d.sf)}</div>`;
 
   function buildBracket() {
+    computeBracketStatus();   // mark the live / next match for highlighting
     const centre = `<div class="bk-center"><div class="bk-h">Final</div>
       <div class="bk-final-box">${matchBox(BK_FINAL)}</div>
       <div class="bk-third"><div class="lab">Match for third place</div>${matchBox(BK_THIRD)}</div></div>`;
