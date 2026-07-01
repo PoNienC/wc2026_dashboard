@@ -236,11 +236,17 @@
   .bk-matches{flex:1;display:flex;flex-direction:column;justify-content:space-around;gap:8px;}
   .bk-center{display:flex;flex-direction:column;justify-content:center;align-items:stretch;min-width:166px;}
   .mbox{background:var(--panel);border:1px solid var(--line);border-radius:8px;box-shadow:var(--shadow);overflow:hidden;position:relative;z-index:1;}
-  /* Current / next match — light-yellow "championship" frame; the live one also gets a rolling ball. */
-  .mbox.next, .mbox.live{border-color:#facc15;box-shadow:0 0 0 2px rgba(250,204,21,.55),0 2px 12px rgba(250,204,21,.35);z-index:2;}
-  .mbox.live{overflow:visible;}
-  .mdate .mlive{color:#dc2626;font-weight:800;letter-spacing:.03em;margin-right:5px;}
-  body.theme-dark .mdate .mlive{color:#f87171;}
+  /* Next match — blue dashed frame; live match — pulsing coral frame + rolling ball (matches the sweepstake page). */
+  .mbox.next{border:1.5px dashed #005DFF;box-shadow:0 0 0 2px rgba(0,93,255,.22);z-index:2;}
+  body.theme-dark .mbox.next{border-color:#4d8bff;box-shadow:0 0 0 2px rgba(77,139,255,.28);}
+  .mbox.live{border:1.5px solid #FF511D;box-shadow:0 0 0 2px rgba(255,81,29,.30);z-index:2;overflow:visible;
+    animation:live-pulse 1.6s infinite;}
+  @keyframes live-pulse{0%,100%{box-shadow:0 0 0 2px rgba(255,81,29,.20)}50%{box-shadow:0 0 0 5px rgba(255,81,29,.45)}}
+  @media (prefers-reduced-motion:reduce){.mbox.live{animation:none;box-shadow:0 0 0 2px rgba(255,81,29,.35);}}
+  .mdate .mlive{color:#FF511D;font-weight:800;letter-spacing:.03em;margin-right:5px;}
+  body.theme-dark .mdate .mlive{color:#ff7a4f;}
+  .mdate .mnext{color:#005DFF;font-weight:800;letter-spacing:.03em;margin-right:5px;}
+  body.theme-dark .mdate .mnext{color:#7fabff;}
   .mball{position:absolute;bottom:-11px;left:2px;font-size:13px;line-height:1;z-index:5;pointer-events:none;
          filter:drop-shadow(0 1px 1px rgba(0,0,0,.35));animation:mball-roll 2.6s linear infinite;}
   @keyframes mball-roll{0%{left:2px;transform:rotate(0)}100%{left:calc(100% - 15px);transform:rotate(1080deg)}}
@@ -639,7 +645,8 @@
         if (ht) g.homeId = ht.id;
         if (at) g.awayId = at.id;
         const hs = (m.Home || {}).Score, as = (m.Away || {}).Score;
-        if (hs != null && as != null) { g.hs = hs; g.as = as; g.finished = true; }
+        // FIFA carries the in-play score while a match runs — only MatchStatus 0 means full-time.
+        if (hs != null && as != null) { g.hs = hs; g.as = as; g.finished = m.MatchStatus === 0; }
         const hp = m.HomeTeamPenaltyScore, ap = m.AwayTeamPenaltyScore;
         if (hp != null && ap != null) { g.hp = hp; g.ap = ap; }   // penalty-shootout scoreline
         if (m.Date) g.ko = m.Date;                                 // UTC kickoff — localised in the browser
@@ -1138,9 +1145,9 @@
     const both = g && teamsById.has(String(g.homeId)) && teamsById.has(String(g.awayId));  // both teams placed → head-to-head
     const live = bkLive.has(String(id)), next = !live && bkNext === String(id);
     return `<div class="mbox ${fin?'fin':''}${live?' live':''}${next?' next':''}" data-mid="${id}">
-      <div class="mdate${both?' has-h2h':''}"${both?` data-h2h="${id}"`:''}>${both?'<span class="h2h-hint">⚔ H2H</span>':''}${live?'<span class="mlive">● LIVE</span>':''}${when}${shoot?' · pens':''}${venue?`<span class="mvenue">📍 ${venue}</span>`:''}</div>
-      ${bkSlot(g&&g.homeId, fh, hs, shoot?hp:null, homeWin, fin)}
-      ${bkSlot(g&&g.awayId, fa, as, shoot?ap:null, awayWin, fin)}${live?'<span class="mball" aria-hidden="true">⚽</span>':''}</div>`;
+      <div class="mdate${both?' has-h2h':''}"${both?` data-h2h="${id}"`:''}>${both?'<span class="h2h-hint">⚔ H2H</span>':''}${live?'<span class="mlive">● LIVE</span>':''}${next?'<span class="mnext">NEXT</span>':''}${when}${shoot?' · pens':''}${venue?`<span class="mvenue">📍 ${venue}</span>`:''}</div>
+      ${bkSlot(g&&g.homeId, fh, hs, shoot?hp:null, homeWin, fin || live)}
+      ${bkSlot(g&&g.awayId, fa, as, shoot?ap:null, awayWin, fin || live)}${live?'<span class="mball" aria-hidden="true">⚽</span>':''}</div>`;
   }
   const bkCol = (round, ids) => `<div class="bk-col"><div class="bk-h">${ROUND_H[round]}</div>
     <div class="bk-matches">${ids.map(matchBox).join('')}</div></div>`;
