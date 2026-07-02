@@ -621,7 +621,11 @@
       ]);
       ingest(tj.teams || tj, gj.groups || gj, mj.games || mj);
       isLive = liveOk;
-      lastUpdated = (gj.groups || gj).map(g => g.updatedAt).filter(Boolean).sort().pop() || null;
+      // worldcup26.ir stopped touching group records when the group stage ended, so their
+      // updatedAt froze (badge stuck on 28 Jun). A successful live fetch IS fresh as of now;
+      // the source stamp remains only for the static fallback.
+      lastUpdated = liveOk ? new Date().toISOString()
+                           : (gj.groups || gj).map(g => g.updatedAt).filter(Boolean).sort().pop() || null;
     } catch (e) {
       console.error('All data sources failed.', e); ingest([], [], []);
     }
