@@ -471,6 +471,10 @@
     // Confidence-tiered estimated salaries {meta, teams:{FC:{priced,total,tierA,tierB,players}}}.
     // Regenerate with scripts/build_salaries.py.
     salaries: 'salaries.json',
+    // Baked goalscorers from FIFA's per-match feed (stable player ids, clean names — the
+    // worldcup26.ir scorer strings are garbled). Refreshed by the same Action as h2h.json;
+    // the app tops up matches that finished after the bake live from api.fifa.com.
+    scorers: 'scorers.json',
     // FIFA/Coca-Cola World Ranking — api.fifa.com IS CORS-open, so the ranking loads live.
     fifaApi: 'https://api.fifa.com/api/v3',
     rankTtlMs: 24 * 60 * 60 * 1000,   // ranking changes ~monthly — cache a day in localStorage
@@ -587,6 +591,7 @@
   let squadsData = null;            // { fifa: {coach, players:[{no,n,p,c,cn}]} } — lazy-loaded squads.json
   let salariesData = null;          // {meta, teams:{FC:{priced,total,tierA,tierB,players,byName}}} — salaries.json
   const scorersByTeam = new Map();  // teamId -> [{name,goals}] sorted desc
+  const fifaMatchMeta = new Map();  // MatchNumber -> {stage, match, status} from FIFA's calendar
   const teamsByIso3 = new Map();    // iso3 -> [team records] (England=ENG, Scotland=SCT home-nation polygons)
   const gamesByTeam = new Map();    // id -> [game]
   const layerByIso3 = new Map();    // iso3 -> leaflet layer
@@ -630,6 +635,7 @@
       console.error('All data sources failed.', e); ingest([], [], []);
     }
     await applyFifaBracket();   // FIFA's official knockout assignments override the lagging feed
+    await loadScorersFifa();    // FIFA-sourced goals replace the garbled feed names (fallback stays)
   }
 
   // Overlay the knockout bracket (M73–M104) with FIFA's official, up-to-date team assignments +
@@ -642,7 +648,11 @@
       const results = (await (await fetch(url, { cache:'no-store' })).json()).Results || [];
       for (const m of results) {
         const num = m.MatchNumber;
-        if (!num || num < 73) continue;                    // knockout matches only
+        if (!num) continue;
+        // Remember every match's FIFA ids + status — the scorer loader needs them to top up
+        // goals for matches that finished (or are live) after the scorers.json bake.
+        fifaMatchMeta.set(num, { stage: m.IdStage, match: m.IdMatch, status: m.MatchStatus });
+        if (num < 73) continue;                            // bracket overlay: knockout matches only
         const id = String(num);
         const g = gamesById.get(id) || { id, homeId:'0', awayId:'0', hs:0, as:0, finished:false, type:'ko' };
         const ht = teamsByFifa.get((m.Home || {}).IdCountry), at = teamsByFifa.get((m.Away || {}).IdCountry);
@@ -1200,8 +1210,73 @@
   }
 
   // ===================================================================
-  //  GOAL SCORERS — parsed from the scorer fields in /games
+  //  GOAL SCORERS — FIFA's per-match feed (stable player ids, clean names).
+  //  scorers.json is baked by scripts/build_scorers.py; matches that finished
+  //  (or are live) after the bake are topped up straight from api.fifa.com.
+  //  The worldcup26.ir parser below remains only as a fallback — its scorer
+  //  strings are hand-typed and often garbled ("Hri Kin" for Harry Kane),
+  //  which used to split one player into several Golden Boot entries.
   // ===================================================================
+  const SCORER_GOAL_TYPES = new Set([1, 2]);   // 1 = penalty, 2 = open play
+  const SHOOTOUT_PERIOD = 11;                  // shootout kicks never count as goals
+
+  // FIFA capitalises surnames ("Harry KANE") — title-case the shouting tokens.
+  const cleanFifaName = (s) => String(s || '').split(/\s+/).map(w =>
+    (w.length > 1 && w === w.toUpperCase())
+      ? w.split(/([-'])/).map(p => /^[-']$/.test(p) ? p : p.charAt(0) + p.slice(1).toLowerCase()).join('')
+      : w).join(' ');
+
+  function extractFifaGoals(detail, matchNumber) {
+    const rows = [];
+    for (const side of ['HomeTeam', 'AwayTeam']) {
+      const t = detail[side]; if (!t) continue;
+      const names = new Map((t.Players || []).map(p =>
+        [p.IdPlayer, locName(p.ShortName) || locName(p.PlayerName) || '']));
+      for (const g of (t.Goals || [])) {
+        if (!SCORER_GOAL_TYPES.has(g.Type) || g.Period === SHOOTOUT_PERIOD) continue;
+        rows.push({ m: matchNumber, f: t.IdCountry, pid: String(g.IdPlayer),
+                    n: cleanFifaName(names.get(g.IdPlayer)) });
+      }
+    }
+    return rows;
+  }
+
+  async function loadScorersFifa() {
+    try {
+      let baked = null;
+      try { baked = await fetchJSON(CONFIG.scorers); } catch (e) { console.warn('scorers.json unavailable', e); }
+      const have = new Set(baked ? baked.meta.matches : []);
+      // top up: finished or live matches the bake doesn't cover yet (usually 0-3)
+      const need = [...fifaMatchMeta.entries()].filter(([n, i]) =>
+        !have.has(n) && i.stage && i.match && (i.status === 0 || i.status === 3));
+      const extra = await Promise.all(need.map(async ([n, i]) => {
+        try {
+          const d = await fetchJSON(`${CONFIG.fifaApi}/live/football/${CONFIG.wcCompetition}/${CONFIG.wcSeason}/${i.stage}/${i.match}?language=en`);
+          return extractFifaGoals(d, n);
+        } catch (e) { return []; }
+      }));
+      const all = (baked ? baked.goals : []).concat(extra.flat());
+      if (!all.length) return false;                       // nothing usable — keep the fallback data
+      topScorers = []; scorersByTeam.clear();
+      const byTeam = new Map();                            // teamId -> Map(playerId -> {name,goals})
+      for (const g of all) {
+        const team = teamsByFifa.get(g.f); if (!team) continue;
+        const tid = String(team.id);
+        if (!byTeam.has(tid)) byTeam.set(tid, new Map());
+        const m = byTeam.get(tid), cur = m.get(g.pid) || { name: g.n, goals: 0 };
+        cur.goals++; if (g.n && g.n.length > cur.name.length) cur.name = g.n;
+        m.set(g.pid, cur);
+      }
+      for (const [tid, m] of byTeam) {
+        const arr = [...m.values()].sort((a, b) => b.goals - a.goals);
+        scorersByTeam.set(tid, arr);
+        for (const p of arr) topScorers.push({ name: p.name, goals: p.goals, teamId: tid });
+      }
+      topScorers.sort((a, b) => b.goals - a.goals || a.name.localeCompare(b.name));
+      return true;
+    } catch (e) { console.warn('FIFA scorers failed — keeping feed-parsed names.', e); return false; }
+  }
+
   function parseScorers(games) {
     topScorers = []; scorersByTeam.clear();
     const cleanName = (e) => e.split(/\s*\d/)[0].trim();                 // name = text before the first digit (minute)
