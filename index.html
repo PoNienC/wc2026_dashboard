@@ -190,6 +190,42 @@
   body.view-scorers #sidebar, body.view-scorers #detail{display:none;}
   body.view-scorers #scorer-board{display:block;}
   body.view-scorers #scorer-nation.open{display:block;}
+
+  /* Travel view — each nation's journey between venues over the map */
+  #travel-board{display:none;position:absolute;top:10px;bottom:10px;left:10px;z-index:600;width:344px;
+    background:var(--panel);border:1px solid var(--line);border-radius:12px;box-shadow:0 8px 28px rgba(0,0,0,.16);overflow:auto;}
+  body.view-travel #sidebar, body.view-travel #detail{display:none;}
+  body.view-travel #travel-board{display:block;}
+  body.view-travel .map-note{display:none;}
+  body.view-travel .leaflet-tile-pane{filter:grayscale(.8) opacity(.8);}
+  body.theme-dark.view-travel .leaflet-tile-pane{filter:grayscale(.85) opacity(.6);}
+  body.view-travel .leaflet-top.leaflet-left{left:365px;}
+  .tv-row{display:flex;align-items:center;gap:9px;padding:7px 12px;cursor:pointer;border-left:3px solid transparent;}
+  .tv-row:hover{background:rgba(125,125,125,.08);}
+  .tv-row.sel{background:rgba(125,125,125,.12);}   /* accent colour set inline per nation */
+  .tv-row img{width:22px;height:16px;border-radius:3px;object-fit:cover;box-shadow:0 0 0 1px rgba(0,0,0,.15);}
+  .tv-rank{width:20px;text-align:right;font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums;}
+  .tv-name{flex:1;min-width:0;font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .tv-sub{display:block;font-size:10px;color:var(--muted);font-weight:500;}
+  .tv-out{display:inline-block;font-size:9px;font-weight:800;color:var(--muted);border:1px solid var(--line);
+    border-radius:5px;padding:0 5px;margin-left:5px;vertical-align:1px;}
+  .tv-km{font-size:12.5px;font-weight:700;font-variant-numeric:tabular-nums;}
+  .tv-legs{padding:2px 12px 10px 42px;font-size:11.5px;color:var(--muted);}
+  .tv-leg{display:flex;justify-content:space-between;gap:8px;padding:2px 0;}
+  .tv-leg.future{opacity:.6;font-style:italic;}
+  .tv-leg .lk{font-variant-numeric:tabular-nums;white-space:nowrap;}
+  .tv-stop{background:transparent;}
+  .tv-stop-in{display:block;height:18px;border-radius:9px;font:700 10px/18px -apple-system,system-ui,sans-serif;
+    text-align:center;box-shadow:0 0 0 2px rgba(255,255,255,.9),0 1px 4px rgba(0,0,0,.35);}
+  .leaflet-tooltip.tv-city{background:transparent;border:0;box-shadow:none;padding:0 2px;
+    color:var(--ink);font-size:9.5px;font-weight:700;letter-spacing:.02em;
+    text-shadow:0 1px 3px var(--panel),0 -1px 3px var(--panel),1px 0 3px var(--panel),-1px 0 3px var(--panel);}
+  .leaflet-tooltip.tv-city::before{display:none;}
+  .tv-flag img{width:24px;height:18px;border-radius:3px;object-fit:cover;
+    box-shadow:0 0 0 1.5px #fff,0 1px 5px rgba(0,0,0,.45);}
+  .tv-div{display:flex;align-items:center;gap:8px;color:var(--muted);font-size:10px;font-weight:800;
+    letter-spacing:1.4px;text-transform:uppercase;padding:10px 12px 4px;}
+  .tv-div::before,.tv-div::after{content:"";flex:1;border-top:1px solid var(--line);}
   .sp-title{font-size:15px;font-weight:700;padding:14px 14px 2px;}
   .sp-sub{font-size:11px;color:var(--muted);padding:0 14px 10px;border-bottom:1px solid var(--line);}
   .sp-head{display:flex;align-items:center;gap:10px;padding:14px;border-bottom:1px solid var(--line);}
@@ -301,11 +337,24 @@
     color:var(--ink);background:var(--panel);border:1px solid var(--line);border-radius:999px;
     padding:7px 12px;cursor:pointer;transition:border-color .15s,color .15s;}
   .sb-3rd-chip:hover{border-color:var(--selected);color:var(--selected);}
-  #third{display:none;position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:800;width:min(560px,94vw);
+  #third, #odds{display:none;position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:800;width:min(560px,94vw);
     max-height:88vh;overflow:auto;background:var(--panel);border:1px solid var(--line);border-radius:14px;
     box-shadow:0 18px 60px rgba(0,0,0,.45);padding:18px 22px 18px;}
-  #third.open{display:block;}
-  #third .x{position:absolute;top:8px;right:12px;border:0;background:transparent;color:var(--muted);font-size:22px;cursor:pointer;line-height:1;}
+  #third.open, #odds.open{display:block;}
+  #third .x, #odds .x{position:absolute;top:8px;right:12px;border:0;background:transparent;color:var(--muted);font-size:22px;cursor:pointer;line-height:1;}
+  .od-head,.od-row{display:grid;grid-template-columns:26px 28px 1fr 64px 44px 44px;gap:9px;align-items:center;}
+  .od-head{font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);padding:0 9px 7px;border-bottom:1px solid var(--line);}
+  .od-head span{text-align:center;} .od-head .od-nm{text-align:left;}
+  .od-row{padding:7px 9px;border-radius:9px;font-size:14px;margin-top:2px;}
+  .od-row img{width:24px;height:16px;border-radius:2px;box-shadow:0 0 0 1px rgba(0,0,0,.12);}
+  .od-row .od-rank{font-weight:700;color:var(--muted);text-align:center;font-size:12.5px;}
+  .od-row .od-nm{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .od-row .od-nm .rk{font-size:11px;color:var(--muted);font-weight:600;}
+  .od-champ{position:relative;height:18px;border-radius:5px;background:rgba(125,125,125,.14);overflow:hidden;}
+  .od-champ i{position:absolute;inset:0 auto 0 0;background:var(--selected);opacity:.85;border-radius:5px;}
+  .od-champ b{position:absolute;inset:0;font-size:11px;font-weight:800;text-align:center;line-height:18px;font-style:normal;}
+  .od-pct{text-align:center;font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums;}
+  .win-odds{font-size:10px;font-weight:700;color:var(--muted);}
   .tp-sub{font-size:12.5px;color:var(--muted);margin-bottom:12px;line-height:1.45;}
   .tp-head,.tp-row{display:grid;grid-template-columns:26px 28px 1fr 38px 32px 40px 36px;gap:9px;align-items:center;}
   .tp-head{font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);padding:0 9px 7px;border-bottom:1px solid var(--line);}
@@ -364,6 +413,20 @@
     #scorer-board, #scorer-nation{left:0;right:0;top:auto;bottom:0;width:auto;max-height:60%;border-radius:14px 14px 0 0;}
     /* The bracket page already scrolls (overflow:auto); the zoom nudge for scorers isn't needed on mobile. */
     body.view-scorers .leaflet-top.leaflet-left{left:0;}
+
+    /* Bracket: keep the horizontal scroll, tighten the boxes, let the title + chips wrap. */
+    .bk-title{font-size:15px;line-height:1.5;}
+    .bk-title .bk-sub{display:none;}
+    .bk-3rd-chip{display:inline-block;width:auto;font-size:11.5px;padding:5px 10px;margin:6px 6px 0 0;}
+    .bk-col{min-width:104px;}
+    .mteam{font-size:11px;padding:6px 7px;gap:5px;}
+    .mdate{font-size:8px;}
+    #bracket-view{-webkit-overflow-scrolling:touch;}
+
+    /* Travel: the board becomes a bottom sheet (like the scorers panels). */
+    #travel-board{left:0;right:0;top:auto;bottom:0;width:auto;max-height:52%;border-radius:14px 14px 0 0;}
+    body.view-travel .leaflet-top.leaflet-left{left:0;}
+    .leaflet-tooltip.tv-city{font-size:8.5px;}
   }
 </style>
 </head>
@@ -375,6 +438,7 @@
       <button data-view="map" class="on">Map</button>
       <button data-view="bracket">Bracket</button>
       <button data-view="scorers">Scorers</button>
+      <button data-view="travel">Travel</button>
     </div>
     <div class="seg" id="colourSeg" title="Map colour mode">
       <button data-mode="continent" class="on">By continent</button>
@@ -434,11 +498,13 @@
 
       <aside id="scorer-board" aria-label="Goal leaderboard"></aside>
       <aside id="scorer-nation" aria-label="Nation top scorers"></aside>
+      <aside id="travel-board" aria-label="Travel tracker"></aside>
     </div>
 
     <div id="bracket-view" aria-label="Knockout bracket"></div>
     <div id="h2h" aria-live="polite"></div>
     <div id="third" aria-live="polite"></div>
+    <div id="odds" aria-live="polite"></div>
   </main>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
@@ -646,12 +712,25 @@
     try {
       const url = `${CONFIG.fifaApi}/calendar/matches?idCompetition=${CONFIG.wcCompetition}&idSeason=${CONFIG.wcSeason}&count=200`;
       const results = (await (await fetch(url, { cache:'no-store' })).json()).Results || [];
+      journeysByFifa.clear();
       for (const m of results) {
         const num = m.MatchNumber;
         if (!num) continue;
         // Remember every match's FIFA ids + status — the scorer loader needs them to top up
         // goals for matches that finished (or are live) after the scorers.json bake.
-        fifaMatchMeta.set(num, { stage: m.IdStage, match: m.IdMatch, status: m.MatchStatus });
+        fifaMatchMeta.set(num, { stage: m.IdStage, match: m.IdMatch, status: m.MatchStatus,
+                                 home: (m.Home || {}).IdCountry, away: (m.Away || {}).IdCountry });
+        // Travel tab: log each side's visit to the venue (played and scheduled alike).
+        const sid = String((m.Stadium || {}).IdStadium || '');
+        if (STADIUMS[sid] && m.Date) {
+          for (const [side, other] of [['Home','Away'], ['Away','Home']]) {
+            const fc = (m[side] || {}).IdCountry;
+            if (!fc) continue;
+            if (!journeysByFifa.has(fc)) journeysByFifa.set(fc, []);
+            journeysByFifa.get(fc).push({ date: m.Date, sid, num, done: m.MatchStatus === 0,
+                                          opp: (m[other] || {}).IdCountry || null });
+          }
+        }
         if (num < 73) continue;                            // bracket overlay: knockout matches only
         const id = String(num);
         const g = gamesById.get(id) || { id, homeId:'0', awayId:'0', hs:0, as:0, finished:false, type:'ko' };
@@ -670,6 +749,8 @@
         if (venue) g.venue = venue;
         gamesById.set(id, g);
       }
+      for (const trips of journeysByFifa.values())
+        trips.sort((a, b) => new Date(a.date) - new Date(b.date));
       thirdPlaceRanking = computeThirdPlace(results);       // the best-third-placed-teams card
     } catch (e) { console.warn('FIFA bracket overlay failed — keeping worldcup26.ir bracket.', e); }
   }
@@ -830,7 +911,8 @@
   }
   function styleFor(f) {
     const iso3 = getIso3(f);
-    if (document.body.classList.contains('view-bracket')) {       // greyed backdrop; only the picked nation pops
+    if (document.body.classList.contains('view-bracket') ||
+        document.body.classList.contains('view-travel')) {        // greyed backdrop; only the picked nation pops
       if (iso3===bkHi) return CONFIG.style.selected;
       return isQualified(iso3) ? CONFIG.style.muted : baseStyle();
     }
@@ -1108,6 +1190,71 @@
     101:['W97','W98'], 102:['W99','W100'], 104:['W101','W102'], 103:['L101','L102'],
   };
 
+  // ===================================================================
+  //  ADVANCEMENT ODDS — exact probability propagation over the knockout
+  //  tree, driven by FIFA ranking POINTS (Elo-style logistic). No Monte
+  //  Carlo needed post-groups: with the bracket fixed, P(reach round) is
+  //  a sum over the possible opponents, computed exactly. Played matches
+  //  contribute certainty; live matches keep their pre-match odds.
+  // ===================================================================
+  const SHOW_ODDS = false;    // user call (8 Jul): odds stay OFF this public page — flip to surface chips + card
+  const ODDS_DIVISOR = 333;   // FIFA points are ~2/3 of the eloratings scale (jetlag-style D=500 → ≈333)
+  const ptsOf  = (fifa) => (fifaRanks[fifa] || {}).pts || null;
+  const oddsOn = () => Object.keys(fifaRanks).length > 0;
+  function pWin(fa, fb) {     // P(team a beats team b) — ET + pens folded in
+    const a = ptsOf(fa), b = ptsOf(fb);
+    if (a == null || b == null) return 0.5;
+    return 1 / (1 + Math.pow(10, (b - a) / ODDS_DIVISOR));
+  }
+  let oddsByTeam = null;      // fifa -> {qf, sf, fin, champ} (probabilities 0..1)
+  function computeOdds() {
+    if (!oddsOn()) { oddsByTeam = null; return; }
+    const fifaOf = (id) => (teamsById.get(String(id)) || {}).fifa || null;
+    const memo = new Map(), sides = new Map();
+    const sideDist = (mid, which) => {
+      const g = gamesById.get(String(mid));
+      const id = which === 0 ? g?.homeId : g?.awayId;
+      if (g && teamsById.has(String(id))) return new Map([[fifaOf(id), 1]]);
+      const f = (BK_FEEDS[mid] || [])[which];
+      return f ? winnerDist(f) : new Map();
+    };
+    function winnerDist(mid) {
+      if (memo.has(mid)) return memo.get(mid);
+      const g = gamesById.get(String(mid));
+      const h = sideDist(mid, 0), a = sideDist(mid, 1);
+      sides.set(mid, { h, a });
+      const res = new Map();
+      if (g && g.finished && h.size === 1 && a.size === 1) {
+        const shoot = g.hp != null && g.ap != null;
+        const homeWin = g.hs > g.as || (shoot && g.hp > g.ap);
+        res.set(fifaOf(homeWin ? g.homeId : g.awayId), 1);
+      } else {
+        for (const [t, pt] of h) { let s = 0; for (const [o, po] of a) s += po * pWin(t, o); res.set(t, (res.get(t) || 0) + pt * s); }
+        for (const [t, pt] of a) { let s = 0; for (const [o, po] of h) s += po * pWin(t, o); res.set(t, (res.get(t) || 0) + pt * s); }
+      }
+      memo.set(mid, res);
+      return res;
+    }
+    const champ = winnerDist(104);          // pulls the whole tree through
+    oddsByTeam = new Map();
+    const add = (fifa, key, p) => {
+      if (!fifa || !p) return;
+      const o = oddsByTeam.get(fifa) || { qf: 0, sf: 0, fin: 0, champ: 0 };
+      o[key] += p; oddsByTeam.set(fifa, o);
+    };
+    for (const m of [97, 98, 99, 100]) { const s = sides.get(m); if (s) for (const d of [s.h, s.a]) for (const [t, p] of d) add(t, 'qf', p); }
+    for (const m of [101, 102])        { const s = sides.get(m); if (s) for (const d of [s.h, s.a]) for (const [t, p] of d) add(t, 'sf', p); }
+    { const s = sides.get(104); if (s) for (const d of [s.h, s.a]) for (const [t, p] of d) add(t, 'fin', p); }
+    for (const [t, p] of champ) add(t, 'champ', p);
+  }
+  // Pre-match win odds for one undecided match box (both teams placed).
+  function matchOdds(g) {
+    if (!SHOW_ODDS || !oddsOn() || !g || g.finished) return null;
+    const th = teamsById.get(String(g.homeId)), ta = teamsById.get(String(g.awayId));
+    if (!th || !ta) return null;
+    return pWin(th.fifa, ta.fifa);
+  }
+
   // FIFA stores names as [{Locale, Description}] — pick the en-GB (or first) description.
   const locName = (arr) => Array.isArray(arr) ? ((arr.find(x => x && x.Locale === 'en-GB') || arr[0] || {}).Description || '') : '';
   // Kickoff (FIFA's UTC ISO) rendered in the VIEWER's local timezone — "29 Jun · 21:30".
@@ -1124,10 +1271,11 @@
         .formatToParts(new Date()).find(p => p.type === 'timeZoneName') || {}).value || '';
     } catch (e) { return ''; }
   }
-  function bkSlot(teamId, feeder, score, pen, isWin, finished) {
+  function bkSlot(teamId, feeder, score, pen, isWin, finished, odds) {
     const t = teamsById.get(String(teamId));
     if (t) {
-      const sc = finished ? (pen != null ? `${score} <span class="pens">(${pen})</span>` : `${score}`) : '';
+      const sc = finished ? (pen != null ? `${score} <span class="pens">(${pen})</span>` : `${score}`)
+               : (odds != null ? `<span class="win-odds" title="Model pre-match win probability — FIFA ranking points, Elo-style">${Math.round(odds * 100)}%</span>` : '');
       return `<div class="mteam pick ${isWin?'win':''}" data-team="${t.id}" title="${t.name}">
         <img src="${t.flag}" alt=""><span class="mc">${t.fifa}</span><span class="ms">${sc}</span></div>`;
     }
@@ -1158,10 +1306,11 @@
     const venue = g && g.venue ? g.venue : '';
     const both = g && teamsById.has(String(g.homeId)) && teamsById.has(String(g.awayId));  // both teams placed → head-to-head
     const live = bkLive.has(String(id)), next = !live && bkNext === String(id);
+    const po = (!fin && !live && both) ? matchOdds(g) : null;   // pre-match model odds fill the empty score slot
     return `<div class="mbox ${fin?'fin':''}${live?' live':''}${next?' next':''}" data-mid="${id}">
       <div class="mdate${both?' has-h2h':''}"${both?` data-h2h="${id}"`:''}>${both?'<span class="h2h-hint">⚔ H2H</span>':''}${live?'<span class="mlive">● LIVE</span>':''}${next?'<span class="mnext">NEXT</span>':''}${when}${shoot?' · pens':''}${venue?`<span class="mvenue">📍 ${venue}</span>`:''}</div>
-      ${bkSlot(g&&g.homeId, fh, hs, shoot?hp:null, homeWin, fin || live)}
-      ${bkSlot(g&&g.awayId, fa, as, shoot?ap:null, awayWin, fin || live)}${live?'<span class="mball" aria-hidden="true">⚽</span>':''}</div>`;
+      ${bkSlot(g&&g.homeId, fh, hs, shoot?hp:null, homeWin, fin || live, po)}
+      ${bkSlot(g&&g.awayId, fa, as, shoot?ap:null, awayWin, fin || live, po == null ? null : 1 - po)}${live?'<span class="mball" aria-hidden="true">⚽</span>':''}</div>`;
   }
   const bkCol = (round, ids) => `<div class="bk-col"><div class="bk-h">${ROUND_H[round]}</div>
     <div class="bk-matches">${ids.map(matchBox).join('')}</div></div>`;
@@ -1176,7 +1325,8 @@
     document.getElementById('bracket-view').innerHTML =
       `<h2 class="bk-title">Knockout bracket
         <span class="bk-sub">· bold = winner · click a team for its details · click ⚔ H2H · kick-offs in your local time${tz?` (${tz})`:''}</span>
-        <button class="bk-3rd-chip" id="thirdChip">🥉 3rd-place race</button></h2>
+        <button class="bk-3rd-chip" id="thirdChip">🥉 3rd-place race</button>
+        ${SHOW_ODDS ? '<button class="bk-3rd-chip" id="oddsChip">📈 Champion odds</button>' : ''}</h2>
       <div class="bracket">${bkHalf('left',BK_LEFT)}${centre}${bkHalf('right',BK_RIGHT)}</div>`;
     drawConnectors();
   }
@@ -1356,18 +1506,260 @@
     renderNationScorers(id);
   }
 
+  // ===================================================================
+  //  TRAVEL — each nation's journey between venues, drawn on the map.
+  //  Distances are great-circle km (haversine on WGS84); UTC offsets are
+  //  the fixed July-2026 values per venue (US on DST, Mexico year-round).
+  // ===================================================================
+  const STADIUMS = {   // keyed by FIFA IdStadium (stable across the feed)
+    '400017978': { n:'Los Angeles',    lat:33.9535, lng:-118.3392, utc:-7 },
+    '400257521': { n:'SF Bay Area',    lat:37.4033, lng:-121.9694, utc:-7 },
+    '400216606': { n:'Seattle',        lat:47.5952, lng:-122.3316, utc:-7 },
+    '400248370': { n:'Vancouver',      lat:49.2768, lng:-123.1120, utc:-7 },
+    '400249385': { n:'Houston',        lat:29.6847, lng:-95.4107,  utc:-5 },
+    '400257526': { n:'Dallas',         lat:32.7473, lng:-97.0945,  utc:-5 },
+    '400254717': { n:'Kansas City',    lat:39.0489, lng:-94.4839,  utc:-5 },
+    '400098290': { n:'Atlanta',        lat:33.7554, lng:-84.4008,  utc:-4 },
+    '400257525': { n:'Miami',          lat:25.9580, lng:-80.2389,  utc:-4 },
+    '400248623': { n:'Boston',         lat:42.0909, lng:-71.2643,  utc:-4 },
+    '400248622': { n:'Philadelphia',   lat:39.9008, lng:-75.1675,  utc:-4 },
+    '400257536': { n:'New York/NJ',    lat:40.8135, lng:-74.0745,  utc:-4 },
+    '400242032': { n:'Toronto',        lat:43.6332, lng:-79.4186,  utc:-4 },
+    '400238450': { n:'Monterrey',      lat:25.6693, lng:-100.2442, utc:-6 },
+    '400222084': { n:'Mexico City',    lat:19.3029, lng:-99.1505,  utc:-6 },
+    '400252150': { n:'Guadalajara',    lat:20.6817, lng:-103.4625, utc:-6 },
+  };
+  // Primary national colour (kit/flag) per FIFA code — used for journey lines & badges.
+  const NATION_COLOUR = {
+    ALG:'#006233', ARG:'#75AADB', AUS:'#FFB81C', AUT:'#EF3340', BEL:'#E30613', BIH:'#003DA5',
+    BRA:'#FFDF00', CAN:'#D80621', CIV:'#FF8200', COD:'#0085CA', COL:'#FCD116', CPV:'#003893',
+    CRO:'#ED1C24', CUW:'#002B7F', CZE:'#D7141A', ECU:'#FFDD00', EGY:'#CE1126', ENG:'#CF081F',
+    ESP:'#C60B1E', FRA:'#002395', GER:'#FFCC00', GHA:'#006B3F', HAI:'#00209F', IRN:'#239F40',
+    IRQ:'#007A3D', JOR:'#CE1126', JPN:'#1B3F8B', KOR:'#CD2E3A', KSA:'#006C35', MAR:'#C1272D',
+    MEX:'#006847', NED:'#F36C21', NOR:'#EF2B2D', NZL:'#012169', PAN:'#DA121A', PAR:'#D52B1E',
+    POR:'#A50021', QAT:'#8A1538', RSA:'#FFB612', SCO:'#0065BF', SEN:'#00853F', SUI:'#D52B1E',
+    SWE:'#FFCD00', TUN:'#E70013', TUR:'#E30A17', URU:'#7BAFD4', USA:'#0A3161', UZB:'#0099B5',
+  };
+  const natCol = fc => NATION_COLOUR[fc] || '#f59e0b';
+  const natText = c => { const n = parseInt(c.slice(1), 16), r = n>>16&255, g = n>>8&255, b = n&255;
+                         return (0.299*r + 0.587*g + 0.114*b) / 255 > 0.62 ? '#1a1a1a' : '#fff'; };
+  const journeysByFifa = new Map();   // FIFA code -> [{date, sid, num, done, opp}] in date order
+  const TRAVEL_HOME = (() => {        // hug the venues: Mexico City up to Vancouver, nothing more
+    const ss = Object.values(STADIUMS);
+    return [[Math.min(...ss.map(s => s.lat)) - 1.5, Math.min(...ss.map(s => s.lng)) - 2],
+            [Math.max(...ss.map(s => s.lat)) + 1.5, Math.max(...ss.map(s => s.lng)) + 2]];
+  })();
+  let travelLayer = null, travelSel = null;
+  const travelPad = () => window.matchMedia('(max-width:640px)').matches
+    ? { paddingTopLeft: [10, 10], paddingBottomRight: [10, Math.round(map.getSize().y * 0.45)] }
+    : { paddingTopLeft: [Math.min(380, Math.round(map.getSize().x * 0.4)), 10], paddingBottomRight: [24, 24] };
+
+  const havKm = (a, b) => {
+    const r = Math.PI / 180, R = 6371;
+    const s = Math.sin((b.lat - a.lat) * r / 2) ** 2 +
+              Math.cos(a.lat * r) * Math.cos(b.lat * r) * Math.sin((b.lng - a.lng) * r / 2) ** 2;
+    return 2 * R * Math.asin(Math.sqrt(s));
+  };
+  function gcArc(a, b, n = 24) {       // great-circle interpolation so long legs curve properly
+    const r = Math.PI / 180, d = havKm(a, b) / 6371;
+    if (d < 1e-4) return [[a.lat, a.lng], [b.lat, b.lng]];
+    const la1 = a.lat * r, lo1 = a.lng * r, la2 = b.lat * r, lo2 = b.lng * r, pts = [];
+    for (let i = 0; i <= n; i++) {
+      const f = i / n, A = Math.sin((1 - f) * d) / Math.sin(d), B = Math.sin(f * d) / Math.sin(d);
+      const x = A * Math.cos(la1) * Math.cos(lo1) + B * Math.cos(la2) * Math.cos(lo2);
+      const y = A * Math.cos(la1) * Math.sin(lo1) + B * Math.cos(la2) * Math.sin(lo2);
+      const z = A * Math.sin(la1) + B * Math.sin(la2);
+      pts.push([Math.atan2(z, Math.hypot(x, y)) / r, Math.atan2(y, x) / r]);
+    }
+    return pts;
+  }
+  const roundShort = n => n <= 72 ? 'Group' : n <= 88 ? 'R32' : n <= 96 ? 'R16'
+                        : n <= 100 ? 'QF' : n <= 102 ? 'SF' : n === 103 ? '3rd place' : 'Final';
+  function travelStats(fc) {
+    const trips = journeysByFifa.get(fc) || [];
+    const legs = []; let km = 0, tz = 0, moves = 0;
+    for (let i = 1; i < trips.length; i++) {
+      const A = STADIUMS[trips[i - 1].sid], B = STADIUMS[trips[i].sid];
+      const d = havKm(A, B), dtz = Math.abs(B.utc - A.utc);
+      legs.push({ A, B, aSid: trips[i - 1].sid, bSid: trips[i].sid,
+                  km: d, tz: dtz, future: !trips[i].done,
+                  opp: trips[i].opp, num: trips[i].num,
+                  days: Math.round((new Date(trips[i].date) - new Date(trips[i - 1].date)) / 86400e3) });
+      km += d; tz += dtz; if (d > 1) moves++;
+    }
+    return { legs, km, tz, moves, stops: trips.length, trips };
+  }
+  // Repeat trips between the same two venues bow outwards so they don't overlap
+  // (k = 0 is the plain great circle; 1, 2, ... bend alternately either side).
+  function bowArc(A, B, k, n = 24) {
+    const base = gcArc(A, B, n);
+    if (!k || base.length < 3) return base;
+    const c = Math.cos((A.lat + B.lat) / 2 * Math.PI / 180) || 1;
+    const dLat = B.lat - A.lat, dLng = (B.lng - A.lng) * c;
+    const len = Math.hypot(dLat, dLng);
+    if (len < 0.05) return base;
+    const amp = Math.ceil(k / 2) * Math.min(2.2, len * 0.14) * (k % 2 ? 1 : -1);
+    const pLat = -dLng / len, pLng = (dLat / len) / c;
+    return base.map((p, i) => { const f = Math.sin(Math.PI * i / n);
+                                return [p[0] + pLat * amp * f, p[1] + pLng * amp * f]; });
+  }
+  function eliminatedSet() {           // out = lost a knockout tie, or never reached the knockouts
+    const out = new Set(), inKO = new Set();
+    for (const [n, i] of fifaMatchMeta) {
+      if (n < 73) continue;
+      if (i.home) inKO.add(i.home);
+      if (i.away) inKO.add(i.away);
+    }
+    for (let n = 73; n <= 102; n++) {
+      const g = gamesById.get(String(n));
+      if (!g || !g.finished) continue;
+      const shoot = g.hp != null && g.ap != null;
+      const homeWin = g.hs > g.as || (shoot && g.hp > g.ap);
+      const rec = teamsById.get(String(homeWin ? g.awayId : g.homeId));
+      if (rec) out.add(rec.fifa);
+    }
+    for (const fc of journeysByFifa.keys()) if (!inKO.has(fc)) out.add(fc);
+    return out;
+  }
+  function drawTravelPaths() {
+    if (!map) return;
+    if (travelLayer) travelLayer.remove();
+    travelLayer = L.layerGroup();
+    for (const s of Object.values(STADIUMS))
+      travelLayer.addLayer(L.circleMarker([s.lat, s.lng],
+        { radius: 4, color: '#333', weight: 1.5, fillColor: '#fff', fillOpacity: 1 })
+        .bindTooltip(s.n, { permanent: true, direction: 'right', offset: [7, 0], className: 'tv-city' }));
+    const elim = eliminatedSet();
+    if (travelSel) {                                       // one team isolated: its full journey
+      const fc = travelSel, pairSeen = new Map();
+      const col = natCol(fc), txt = natText(col);
+      for (const leg of travelStats(fc).legs) {
+        if (leg.km < 1) continue;                          // stayed at the same stadium — nothing to draw
+        const key = [leg.aSid, leg.bSid].sort().join('|');
+        const k = pairSeen.get(key) || 0; pairSeen.set(key, k + 1);
+        const oppRec = leg.opp && teamsByFifa.get(leg.opp);
+        const tip = `${leg.A.n} → ${leg.B.n} · ${Math.round(leg.km).toLocaleString('en-GB')} km` +
+                    ` · vs ${oppRec ? oppRec.name : 'TBD'} (${roundShort(leg.num)})`;
+        travelLayer.addLayer(L.polyline(bowArc(leg.A, leg.B, k), {
+          color: col, weight: 2.5, opacity: 0.95,
+          dashArray: leg.future ? '6 7' : null }).bindTooltip(tip, { sticky: true }));
+      }
+      const bySid = new Map();                             // stop badges; repeat venues merge ("1·2")
+      (journeysByFifa.get(fc) || []).forEach((stop, i) => {
+        if (!bySid.has(stop.sid)) bySid.set(stop.sid, []);
+        bySid.get(stop.sid).push(i + 1);
+      });
+      for (const [sid, nums] of bySid) {
+        const s = STADIUMS[sid], label = nums.join('·');
+        travelLayer.addLayer(L.marker([s.lat, s.lng],
+          { icon: L.divIcon({ className: 'tv-stop',
+                              html: `<span class="tv-stop-in" style="background:${col};color:${txt}">${label}</span>`,
+                              iconSize: [Math.max(18, 8 + 9 * label.length), 18] }) }));
+      }
+    } else {                                               // default: each surviving team's NEXT trip only
+      const pairSeen = new Map(), arrivals = new Map();    // arrivals: destination sid -> [{rec, tip}]
+      [...journeysByFifa.keys()].filter(fc => !elim.has(fc)).forEach(fc => {
+        const trips = journeysByFifa.get(fc) || [];
+        const ni = trips.findIndex(t => !t.done);
+        if (ni <= 0) return;                               // nothing upcoming with a known venue
+        const prev = trips[ni - 1], next = trips[ni];
+        const A = STADIUMS[prev.sid], B = STADIUMS[next.sid];
+        const rec = teamsByFifa.get(fc); if (!rec) return;
+        const oppRec = next.opp && teamsByFifa.get(next.opp);
+        const tip = `${rec.name}: ${A.n} → ${B.n} · ${Math.round(havKm(A, B)).toLocaleString('en-GB')} km` +
+                    ` · vs ${oppRec ? oppRec.name : 'TBD'} (${roundShort(next.num)})`;
+        if (havKm(A, B) >= 1) {
+          const key = [prev.sid, next.sid].sort().join('|');
+          const k = pairSeen.get(key) || 0; pairSeen.set(key, k + 1);
+          travelLayer.addLayer(L.polyline(bowArc(A, B, k), {
+            color: natCol(fc), weight: 2, opacity: 0.9,
+            dashArray: '6 7' }).bindTooltip(tip, { sticky: true }));
+        }
+        if (!arrivals.has(next.sid)) arrivals.set(next.sid, []);
+        arrivals.get(next.sid).push({ rec, tip });
+      });
+      for (const [sid, list] of arrivals) {                // flags at the destination, fanned if shared
+        const s = STADIUMS[sid];
+        list.forEach((a, i) => {
+          const off = Math.round((i - (list.length - 1) / 2) * 27);
+          travelLayer.addLayer(L.marker([s.lat, s.lng], {
+            icon: L.divIcon({ className: 'tv-flag', html: `<img src="${a.rec.flag}" alt="">`,
+                              iconSize: [24, 18], iconAnchor: [12 - off, 24] })
+          }).bindTooltip(a.tip, { direction: 'top' }));
+        });
+      }
+    }
+    travelLayer.addTo(map);
+    if (travelSel) {
+      const pts = (journeysByFifa.get(travelSel) || []).map(j => [STADIUMS[j.sid].lat, STADIUMS[j.sid].lng]);
+      if (pts.length > 1) map.flyToBounds(pts, { ...travelPad(), duration: .8 });
+    }
+  }
+  function renderTravelBoard() {
+    const elim = eliminatedSet();
+    const fmt = n => Math.round(n).toLocaleString('en-GB');
+    const all = [...journeysByFifa.keys()]
+      .map(fc => ({ fc, rec: teamsByFifa.get(fc), st: travelStats(fc) }))
+      .filter(r => r.rec)
+      .sort((a, b) => b.st.km - a.st.km);
+    const rank = new Map(all.map((r, i) => [r.fc, i + 1]));   // overall km rank, kept across the grouping
+    const rows = [...all.filter(r => !elim.has(r.fc)), ...all.filter(r => elim.has(r.fc))];
+    document.getElementById('travel-board').innerHTML =
+      `<div class="sp-title">✈️ Travel tracker</div>
+       <div class="sp-sub">Map shows each surviving team's next trip (flag = destination) · click a team for its full journey · ranked by total great-circle km</div>` +
+      rows.map((r) => {
+        const i = rank.get(r.fc) - 1;
+        const divider = elim.has(r.fc) && (rows.indexOf(r) === 0 || !elim.has(rows[rows.indexOf(r) - 1]?.fc))
+          ? '<div class="tv-div">knocked out</div>' : '';
+        return divider + rowHTML(r, i);
+      }).join('');
+    function rowHTML(r, i) {
+        const sel = travelSel === r.fc;
+        return `<div class="tv-row${sel ? ' sel' : ''}"${sel ? ` style="border-left-color:${natCol(r.fc)}"` : ''} data-fifa="${r.fc}" tabindex="0" role="button">
+          <span class="tv-rank">${i + 1}</span><img src="${r.rec.flag}" alt="">
+          <div class="tv-name">${r.rec.name}
+            <span class="tv-sub">${r.st.stops} matches · ${r.st.moves} moves · ${r.st.tz}h</span></div>
+          ${elim.has(r.fc) ? '<span class="tv-out">OUT</span>' : ''}
+          <span class="tv-km">${fmt(r.st.km)} km</span></div>` +
+          (sel ? `<div class="tv-legs">` + r.st.trips.map((t, i) => {
+            const s = STADIUMS[t.sid];
+            const oppRec = t.opp && teamsByFifa.get(t.opp);
+            const leg = i > 0 ? r.st.legs[i - 1] : null;
+            const lk = !leg ? '—' : leg.km < 1 ? 'no travel'
+                     : `${fmt(leg.km)} km${leg.tz ? ` · ${leg.tz}h` : ''} · ${leg.days}d`;
+            const rd = t.num > 72 ? ` <em>(${roundShort(t.num)})</em>` : '';
+            return `<div class="tv-leg${t.done ? '' : ' future'}">
+              <span>${i + 1}. ${s.n} · vs ${oppRec ? oppRec.fifa : 'TBD'}${rd}</span>
+              <span class="lk">${lk}</span></div>`;
+          }).join('') + `</div>` : '');
+    }
+  }
+  function buildTravel() { renderTravelBoard(); drawTravelPaths(); }
+
   function setView(v) {
     document.querySelectorAll('#viewSeg button').forEach(x => x.classList.toggle('on', x.dataset.view===v));
     document.body.classList.toggle('view-bracket', v==='bracket');
     document.body.classList.toggle('view-scorers', v==='scorers');
+    document.body.classList.toggle('view-travel', v==='travel');
     document.getElementById('colourSeg').style.display = v==='map' ? '' : 'none';
-    closeH2H(); closeThird();
+    closeH2H(); closeThird(); closeOdds();
+    if (v!=='travel' && travelLayer) { travelLayer.remove(); travelLayer = null; }
     if (v==='bracket') {
       buildBracket();
       if (map) { map.invalidateSize(); map.setView([20,0], 2, { animate:false }); }
     } else if (v==='scorers') {
       buildLeaderboard();
       if (map) { map.invalidateSize(); map.setView([25,0], 2, { animate:false }); }
+    } else if (v==='travel') {
+      buildTravel();
+      if (map) {
+        map.stop();                                  // abort any in-flight fly/zoom that would override the framing
+        void document.body.offsetHeight;             // force the class-flip reflow so getSize() is accurate NOW
+        const frame = () => { map.invalidateSize();
+          if (!travelSel) map.fitBounds(TRAVEL_HOME, { ...travelPad(), animate:false }); };
+        frame();
+        setTimeout(frame, 150);                      // re-assert once layout fully settles (rAF never fires in hidden tabs)
+      }
     } else if (map) {
       map.invalidateSize();
     }
@@ -1541,8 +1933,43 @@
       <div class="tp-foot">Computed live from FIFA's official match feed. Exact order of tied teams may differ from
         FIFA's further tiebreakers (goals scored, disciplinary points, drawing of lots).</div>`;
   }
-  function openThird() { renderThirdPlace(); closeH2H(); document.getElementById('third').classList.add('open'); }
+  function openThird() { renderThirdPlace(); closeH2H(); closeOdds(); document.getElementById('third').classList.add('open'); }
   function closeThird() { const el = document.getElementById('third'); if (el) el.classList.remove('open'); }
+
+  // ---- Champion odds card (📈 chip in the bracket header) -------------------
+  function renderOdds() {
+    const el = document.getElementById('odds');
+    computeOdds();
+    if (!oddsByTeam || !oddsByTeam.size) {
+      el.innerHTML = `<button class="x" aria-label="Close">×</button>
+        <div class="h2h-title">📈 Champion odds</div>
+        <div class="tp-sub">Waiting for the FIFA ranking to load — try again in a moment.</div>`;
+      return;
+    }
+    const rows = [...oddsByTeam.entries()]
+      .filter(([, o]) => o.champ > 0.0005)
+      .sort((a, b) => b[1].champ - a[1].champ);
+    const pc = (p) => p >= 0.995 ? '100%' : p < 0.005 ? '<1%' : Math.round(p * 100) + '%';
+    el.innerHTML = `<button class="x" aria-label="Close">×</button>
+      <div class="h2h-title">📈 Champion odds</div>
+      <div class="tp-sub">Exact probabilities over the remaining bracket — an Elo-style model on <b>FIFA ranking points</b>
+        (divisor ${ODDS_DIVISOR}). Pre-match only: no injuries or form, penalties fold into the win chance.
+        Played results are locked in; odds update as results land.</div>
+      <div class="od-head"><span>#</span><span></span><span class="od-nm">Team</span><span>Champion</span><span>Final</span><span>SF</span></div>` +
+      rows.map(([fifa, o], i) => {
+        const team = teamsByFifa.get(fifa);
+        return `<div class="od-row">
+          <span class="od-rank">${i + 1}</span>
+          <img src="${team ? team.flag : ''}" alt="">
+          <span class="od-nm">${team ? team.name : fifa}${rankOf(fifa) ? ` <span class="rk">#${rankOf(fifa)}</span>` : ''}</span>
+          <span class="od-champ"><i style="width:${Math.max(2, Math.round(o.champ * 100))}%"></i><b>${pc(o.champ)}</b></span>
+          <span class="od-pct">${pc(o.fin)}</span>
+          <span class="od-pct">${pc(o.sf)}</span></div>`;
+      }).join('');
+  }
+  function openOdds() { if (!SHOW_ODDS) return;
+    renderOdds(); closeH2H(); closeThird(); document.getElementById('odds').classList.add('open'); }
+  function closeOdds() { const el = document.getElementById('odds'); if (el) el.classList.remove('open'); }
 
   async function boot() {
     isDark = autoTheme();
@@ -1553,6 +1980,8 @@
     updateBadge();
     renderSidebar();
     loadRankings().then(() => {            // ranking loads async (CORS-open) — repaint badges when ready
+      computeOdds();
+      if (document.body.classList.contains('view-bracket')) buildBracket();
       renderSidebar();
       if (selectedId) { const row = document.querySelector(`#groups .team[data-id="${selectedId}"]`); if (row) row.classList.add('active'); }
       if (selectedId && teamsById.has(selectedId) && document.getElementById('detail').classList.contains('open'))
@@ -1586,18 +2015,28 @@
     });
     document.getElementById('bracket-view').addEventListener('click', e => {
       if (e.target.closest('#thirdChip')) { openThird(); return; }
+      if (e.target.closest('#oddsChip')) { openOdds(); return; }
       const md = e.target.closest('.mdate.has-h2h');
       if (md) { const g = gamesById.get(md.dataset.h2h); if (g) { closeThird(); showH2H(g.homeId, g.awayId); } return; }
       const el = e.target.closest('.mteam.pick');
-      if (el) { closeH2H(); closeThird(); bracketSelectTeam(el.dataset.team); return; }
-      closeH2H(); closeThird();   // clicking the bracket backdrop dismisses the cards
+      if (el) { closeH2H(); closeThird(); closeOdds(); bracketSelectTeam(el.dataset.team); return; }
+      closeH2H(); closeThird(); closeOdds();   // clicking the bracket backdrop dismisses the cards
       if (map && map.getZoom() > 2) map.flyTo([20, 0], 2, { duration: 0.8 });   // ...and zooms the map back out
     });
     document.getElementById('h2h').addEventListener('click', e => { if (e.target.closest('.x')) closeH2H(); });
     document.getElementById('third').addEventListener('click', e => { if (e.target.closest('.x')) closeThird(); });
+    document.getElementById('odds').addEventListener('click', e => { if (e.target.closest('.x')) closeOdds(); });
     const board = document.getElementById('scorer-board');
     board.addEventListener('click', e => { const el = e.target.closest('.lb-row'); if (el) selectScorerNation(el.dataset.team); });
     board.addEventListener('keydown', e => { const el = e.target.closest('.lb-row'); if (el && (e.key==='Enter'||e.key===' ')) { e.preventDefault(); selectScorerNation(el.dataset.team); } });
+    const tvBoard = document.getElementById('travel-board');
+    const tvPick = el => {
+      travelSel = (travelSel === el.dataset.fifa) ? null : el.dataset.fifa;
+      buildTravel();
+      if (!travelSel && map) map.flyToBounds(TRAVEL_HOME, { ...travelPad(), duration:.6 });
+    };
+    tvBoard.addEventListener('click', e => { const el = e.target.closest('.tv-row'); if (el) tvPick(el); });
+    tvBoard.addEventListener('keydown', e => { const el = e.target.closest('.tv-row'); if (el && (e.key==='Enter'||e.key===' ')) { e.preventDefault(); tvPick(el); } });
     window.addEventListener('resize', () => { if (document.body.classList.contains('view-bracket')) drawConnectors(); });
 
     // Live auto-refresh: re-pull standings / fixtures / bracket every 60s, preserving the current view.
@@ -1612,6 +2051,7 @@
         buildLeaderboard();
         if (selectedId && document.getElementById('scorer-nation').classList.contains('open')) renderNationScorers(selectedId);
       }
+      if (document.body.classList.contains('view-travel')) buildTravel();
     }, 60000);
 
     setView('bracket');   // land on the knockout bracket by default (data is loaded by now)
