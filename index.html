@@ -233,6 +233,11 @@
   /* the flag that flies along the route while a journey animates */
   .tv-planeflag img{width:26px;height:19px;border-radius:3px;object-fit:cover;
     box-shadow:0 0 0 2px #fff,0 2px 8px rgba(0,0,0,.6);}
+  /* running km counter that ticks up under the flying flag */
+  .leaflet-tooltip.tv-kmcount{background:rgba(17,17,17,.9);border:0;box-shadow:0 2px 8px rgba(0,0,0,.5);
+    color:#fff;font-size:12px;font-weight:800;letter-spacing:.02em;font-variant-numeric:tabular-nums;
+    padding:2px 8px;border-radius:999px;}
+  .leaflet-tooltip.tv-kmcount::before{display:none;}
   .tv-div{display:flex;align-items:center;gap:8px;color:var(--muted);font-size:10px;font-weight:800;
     letter-spacing:1.4px;text-transform:uppercase;padding:10px 12px 4px;}
   .tv-div::before,.tv-div::after{content:"";flex:1;border-top:1px solid var(--line);}
@@ -1680,17 +1685,25 @@
       for (const [sid, nums] of bySid) addStopBadge(sid, nums, col, txt);
       return;
     }
-    // animated: the flag flies the route, the line grows behind it, badges land as reached
-    const path = [], stopAt = [];
+    // animated: the flag flies the route, the line grows behind it, badges land, km ticks up
+    const path = [], stopAt = [], cumKm = [];
+    let acc = 0;
     drawn.forEach((d, si) => {
-      d.pts.forEach((p, pi) => { if (si > 0 && pi === 0) return; path.push(p); });   // avoid duplicate join point
+      const seg = d.pts, n = seg.length - 1;
+      for (let pi = (si > 0 ? 1 : 0); pi < seg.length; pi++) {   // skip the duplicate join point on later legs
+        path.push(seg[pi]);
+        cumKm.push(acc + d.leg.km * (pi / n));                   // count by great-circle km → total matches the board
+      }
+      acc += d.leg.km;
       stopAt.push({ idx: path.length - 1, sid: d.leg.bSid });
     });
+    const kmStr = v => Math.round(v).toLocaleString('en-GB') + ' km';
     const line = L.polyline([path[0]], { color: col, weight: 2.8, opacity: 0.97 }).addTo(travelLayer);
     const plane = L.marker(path[0], { zIndexOffset: 1200,
       icon: L.divIcon({ className: 'tv-planeflag',
         html: `<img src="${(teamsByFifa.get(fc) || {}).flag || ''}" alt="">`, iconSize: [26, 19], iconAnchor: [13, 10] })
     }).addTo(travelLayer);
+    plane.bindTooltip('0 km', { permanent: true, direction: 'bottom', offset: [0, 11], className: 'tv-kmcount' });
     const startSid = drawn[0].leg.aSid, shown = new Set();
     addStopBadge(startSid, bySid.get(startSid), col, txt); shown.add(startSid);
     const anim = { cancelled: false, finished: false }; journeyAnim = anim;
@@ -1700,6 +1713,7 @@
       if (anim.finished) return;
       anim.finished = true;
       line.setLatLngs(path); plane.setLatLng(path[total]);
+      plane.setTooltipContent(kmStr(cumKm[total]));
       for (const [sid, nums] of bySid) if (!shown.has(sid)) { addStopBadge(sid, nums, col, txt); shown.add(sid); }
       line.bindTooltip(`${teamsByFifa.get(fc)?.name || fc} — full journey`, { sticky: true });
       if (journeyAnim === anim) journeyAnim = null;
@@ -1711,6 +1725,7 @@
       const idx = Math.max(1, Math.round(t * total));
       line.setLatLngs(path.slice(0, idx + 1));
       plane.setLatLng(path[idx]);
+      plane.setTooltipContent(kmStr(cumKm[idx]));
       while (nextStop < stopAt.length && idx >= stopAt[nextStop].idx) {
         const sid = stopAt[nextStop].sid;
         if (!shown.has(sid)) { addStopBadge(sid, bySid.get(sid), col, txt); shown.add(sid); }
