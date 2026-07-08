@@ -197,8 +197,7 @@
   body.view-travel #sidebar, body.view-travel #detail{display:none;}
   body.view-travel #travel-board{display:block;}
   body.view-travel .map-note{display:none;}
-  body.view-travel .leaflet-tile-pane{filter:grayscale(.8) opacity(.8);}
-  body.theme-dark.view-travel .leaflet-tile-pane{filter:grayscale(.85) opacity(.6);}
+  /* Travel keeps the map at full richness (no grey backdrop) so the routes read against real tiles. */
   body.view-travel .leaflet-top.leaflet-left{left:365px;}
   .tv-row{display:flex;align-items:center;gap:9px;padding:7px 12px;cursor:pointer;border-left:3px solid transparent;}
   .tv-row:hover{background:rgba(125,125,125,.08);}
@@ -223,6 +222,9 @@
   .leaflet-tooltip.tv-city::before{display:none;}
   .tv-flag img{width:24px;height:18px;border-radius:3px;object-fit:cover;
     box-shadow:0 0 0 1.5px #fff,0 1px 5px rgba(0,0,0,.45);}
+  /* the flag that flies along the route while a journey animates */
+  .tv-planeflag img{width:26px;height:19px;border-radius:3px;object-fit:cover;
+    box-shadow:0 0 0 2px #fff,0 2px 8px rgba(0,0,0,.6);}
   .tv-div{display:flex;align-items:center;gap:8px;color:var(--muted);font-size:10px;font-weight:800;
     letter-spacing:1.4px;text-transform:uppercase;padding:10px 12px 4px;}
   .tv-div::before,.tv-div::after{content:"";flex:1;border-top:1px solid var(--line);}
@@ -918,8 +920,10 @@
   }
   function styleFor(f) {
     const iso3 = getIso3(f);
-    if (document.body.classList.contains('view-bracket') ||
-        document.body.classList.contains('view-travel')) {        // greyed backdrop; only the picked nation pops
+    if (document.body.classList.contains('view-travel')) {        // uniform base map — no grey backdrop; routes carry it
+      return baseStyle();
+    }
+    if (document.body.classList.contains('view-bracket')) {       // greyed backdrop; only the picked nation pops
       if (iso3===bkHi) return CONFIG.style.selected;
       return isQualified(iso3) ? CONFIG.style.muted : baseStyle();
     }
@@ -1557,7 +1561,7 @@
     return [[Math.min(...ss.map(s => s.lat)) - 1.5, Math.min(...ss.map(s => s.lng)) - 2],
             [Math.max(...ss.map(s => s.lat)) + 1.5, Math.max(...ss.map(s => s.lng)) + 2]];
   })();
-  let travelLayer = null, travelSel = null;
+  let travelLayer = null, travelSel = null, animateJourneyNext = false, journeyAnim = null;
   const travelPad = () => window.matchMedia('(max-width:640px)').matches
     ? { paddingTopLeft: [10, 10], paddingBottomRight: [10, Math.round(map.getSize().y * 0.45)] }
     : { paddingTopLeft: [Math.min(380, Math.round(map.getSize().x * 0.4)), 10], paddingBottomRight: [24, 24] };
@@ -1629,8 +1633,91 @@
     for (const fc of journeysByFifa.keys()) if (!inKO.has(fc)) out.add(fc);
     return out;
   }
+  // ---- selected-team journey: static, or animated (flag flies point-to-point) ----
+  function cancelJourneyAnim() { if (journeyAnim) journeyAnim.cancelled = true; journeyAnim = null; }
+  function addStopBadge(sid, nums, col, txt) {
+    const s = STADIUMS[sid], label = (nums || []).join('·');
+    travelLayer.addLayer(L.marker([s.lat, s.lng],
+      { icon: L.divIcon({ className: 'tv-stop',
+          html: `<span class="tv-stop-in" style="background:${col};color:${txt}">${label}</span>`,
+          iconSize: [Math.max(18, 8 + 9 * label.length), 18] }) }));
+  }
+  function badgesBySid(fc) {
+    const bySid = new Map();
+    (journeysByFifa.get(fc) || []).forEach((stop, i) => {
+      if (!bySid.has(stop.sid)) bySid.set(stop.sid, []);
+      bySid.get(stop.sid).push(i + 1);
+    });
+    return bySid;
+  }
+  function legTip(leg) {
+    const oppRec = leg.opp && teamsByFifa.get(leg.opp);
+    return `${leg.A.n} → ${leg.B.n} · ${Math.round(leg.km).toLocaleString('en-GB')} km` +
+           ` · vs ${oppRec ? oppRec.name : 'TBD'} (${roundShort(leg.num)})`;
+  }
+  function drawSelectedJourney(fc, animate) {
+    cancelJourneyAnim();
+    const col = natCol(fc), txt = natText(col);
+    const bySid = badgesBySid(fc);
+    const pairSeen = new Map();
+    const drawn = travelStats(fc).legs.filter(l => l.km >= 1).map(leg => {
+      const key = [leg.aSid, leg.bSid].sort().join('|');
+      const k = pairSeen.get(key) || 0; pairSeen.set(key, k + 1);
+      return { leg, pts: bowArc(leg.A, leg.B, k) };
+    });
+    if (!animate || !drawn.length) {                       // static: whole route + all badges at once
+      for (const d of drawn)
+        travelLayer.addLayer(L.polyline(d.pts, { color: col, weight: 2.5, opacity: 0.95,
+          dashArray: d.leg.future ? '6 7' : null }).bindTooltip(legTip(d.leg), { sticky: true }));
+      for (const [sid, nums] of bySid) addStopBadge(sid, nums, col, txt);
+      return;
+    }
+    // animated: the flag flies the route, the line grows behind it, badges land as reached
+    const path = [], stopAt = [];
+    drawn.forEach((d, si) => {
+      d.pts.forEach((p, pi) => { if (si > 0 && pi === 0) return; path.push(p); });   // avoid duplicate join point
+      stopAt.push({ idx: path.length - 1, sid: d.leg.bSid });
+    });
+    const line = L.polyline([path[0]], { color: col, weight: 2.8, opacity: 0.97 }).addTo(travelLayer);
+    const plane = L.marker(path[0], { zIndexOffset: 1200,
+      icon: L.divIcon({ className: 'tv-planeflag',
+        html: `<img src="${(teamsByFifa.get(fc) || {}).flag || ''}" alt="">`, iconSize: [26, 19], iconAnchor: [13, 10] })
+    }).addTo(travelLayer);
+    const startSid = drawn[0].leg.aSid, shown = new Set();
+    addStopBadge(startSid, bySid.get(startSid), col, txt); shown.add(startSid);
+    const anim = { cancelled: false, finished: false }; journeyAnim = anim;
+    const total = path.length - 1, DUR = (300 + drawn.length * 620) * 4 / 3;   // pace scales with legs; 75% speed
+    let start = null, nextStop = 0;
+    const complete = () => {                                // idempotent: draw the whole route + every badge
+      if (anim.finished) return;
+      anim.finished = true;
+      line.setLatLngs(path); plane.setLatLng(path[total]);
+      for (const [sid, nums] of bySid) if (!shown.has(sid)) { addStopBadge(sid, nums, col, txt); shown.add(sid); }
+      line.bindTooltip(`${teamsByFifa.get(fc)?.name || fc} — full journey`, { sticky: true });
+      if (journeyAnim === anim) journeyAnim = null;
+    };
+    function frame(now) {
+      if (anim.cancelled || anim.finished) return;
+      if (start === null) start = now;
+      const t = Math.min(1, (now - start) / DUR);
+      const idx = Math.max(1, Math.round(t * total));
+      line.setLatLngs(path.slice(0, idx + 1));
+      plane.setLatLng(path[idx]);
+      while (nextStop < stopAt.length && idx >= stopAt[nextStop].idx) {
+        const sid = stopAt[nextStop].sid;
+        if (!shown.has(sid)) { addStopBadge(sid, bySid.get(sid), col, txt); shown.add(sid); }
+        nextStop++;
+      }
+      if (t < 1) requestAnimationFrame(frame); else complete();
+    }
+    requestAnimationFrame(frame);
+    // safety net: if rAF is throttled (e.g. a backgrounded tab), still land on the full route
+    setTimeout(() => { if (!anim.cancelled) complete(); }, DUR + 600);
+  }
+
   function drawTravelPaths() {
     if (!map) return;
+    cancelJourneyAnim();
     if (travelLayer) travelLayer.remove();
     travelLayer = L.layerGroup();
     for (const s of Object.values(STADIUMS))
@@ -1639,31 +1726,8 @@
         .bindTooltip(s.n, { permanent: true, direction: 'right', offset: [7, 0], className: 'tv-city' }));
     const elim = eliminatedSet();
     if (travelSel) {                                       // one team isolated: its full journey
-      const fc = travelSel, pairSeen = new Map();
-      const col = natCol(fc), txt = natText(col);
-      for (const leg of travelStats(fc).legs) {
-        if (leg.km < 1) continue;                          // stayed at the same stadium — nothing to draw
-        const key = [leg.aSid, leg.bSid].sort().join('|');
-        const k = pairSeen.get(key) || 0; pairSeen.set(key, k + 1);
-        const oppRec = leg.opp && teamsByFifa.get(leg.opp);
-        const tip = `${leg.A.n} → ${leg.B.n} · ${Math.round(leg.km).toLocaleString('en-GB')} km` +
-                    ` · vs ${oppRec ? oppRec.name : 'TBD'} (${roundShort(leg.num)})`;
-        travelLayer.addLayer(L.polyline(bowArc(leg.A, leg.B, k), {
-          color: col, weight: 2.5, opacity: 0.95,
-          dashArray: leg.future ? '6 7' : null }).bindTooltip(tip, { sticky: true }));
-      }
-      const bySid = new Map();                             // stop badges; repeat venues merge ("1·2")
-      (journeysByFifa.get(fc) || []).forEach((stop, i) => {
-        if (!bySid.has(stop.sid)) bySid.set(stop.sid, []);
-        bySid.get(stop.sid).push(i + 1);
-      });
-      for (const [sid, nums] of bySid) {
-        const s = STADIUMS[sid], label = nums.join('·');
-        travelLayer.addLayer(L.marker([s.lat, s.lng],
-          { icon: L.divIcon({ className: 'tv-stop',
-                              html: `<span class="tv-stop-in" style="background:${col};color:${txt}">${label}</span>`,
-                              iconSize: [Math.max(18, 8 + 9 * label.length), 18] }) }));
-      }
+      drawSelectedJourney(travelSel, animateJourneyNext);
+      animateJourneyNext = false;
     } else {                                               // default: each surviving team's NEXT trip only
       const pairSeen = new Map(), arrivals = new Map();    // arrivals: destination sid -> [{rec, tip}]
       [...journeysByFifa.keys()].filter(fc => !elim.has(fc)).forEach(fc => {
@@ -1791,7 +1855,7 @@
     document.body.classList.toggle('view-travel', v==='travel');
     document.getElementById('colourSeg').style.display = v==='map' ? '' : 'none';
     closeH2H(); closeThird(); closeOdds();
-    if (v!=='travel' && travelLayer) { travelLayer.remove(); travelLayer = null; }
+    if (v!=='travel' && travelLayer) { cancelJourneyAnim(); travelLayer.remove(); travelLayer = null; }
     if (v==='bracket') {
       buildBracket();
       if (map) { map.invalidateSize(); map.setView([20,0], 2, { animate:false }); }
@@ -2087,6 +2151,7 @@
     const tvBoard = document.getElementById('travel-board');
     const tvPick = el => {
       travelSel = (travelSel === el.dataset.fifa) ? null : el.dataset.fifa;
+      animateJourneyNext = !!travelSel;                    // play the fly-through only on a fresh selection
       buildTravel();
       if (!travelSel && map) map.flyToBounds(TRAVEL_HOME, { ...travelPad(), duration:.6 });
     };
