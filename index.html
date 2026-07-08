@@ -355,6 +355,13 @@
   .od-champ b{position:absolute;inset:0;font-size:11px;font-weight:800;text-align:center;line-height:18px;font-style:normal;}
   .od-pct{text-align:center;font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums;}
   .win-odds{font-size:10px;font-weight:700;color:var(--muted);}
+  .h2h-compare{margin-top:14px;padding-top:2px;border-top:1px solid var(--line);}
+  .cmp-head{display:grid;grid-template-columns:100px 1fr 1fr;gap:8px;padding:8px 4px;font-weight:700;align-items:center;}
+  .cmp-head img{width:20px;height:14px;border-radius:2px;margin-right:5px;vertical-align:-2px;box-shadow:0 0 0 1px rgba(0,0,0,.12);}
+  .cmp-head .lab{color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:.05em;}
+  .cmp-row{display:grid;grid-template-columns:100px 1fr 1fr;gap:8px;padding:6px 4px;border-top:1px solid var(--line);
+    font-size:12px;align-items:center;}
+  .cmp-row .lab{color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:.04em;}
   .tp-sub{font-size:12.5px;color:var(--muted);margin-bottom:12px;line-height:1.45;}
   .tp-head,.tp-row{display:grid;grid-template-columns:26px 28px 1fr 38px 32px 40px 36px;gap:9px;align-items:center;}
   .tp-head{font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);padding:0 9px 7px;border-bottom:1px solid var(--line);}
@@ -1326,7 +1333,8 @@
       `<h2 class="bk-title">Knockout bracket
         <span class="bk-sub">· bold = winner · click a team for its details · click ⚔ H2H · kick-offs in your local time${tz?` (${tz})`:''}</span>
         <button class="bk-3rd-chip" id="thirdChip">🥉 3rd-place race</button>
-        ${SHOW_ODDS ? '<button class="bk-3rd-chip" id="oddsChip">📈 Champion odds</button>' : ''}</h2>
+        ${SHOW_ODDS ? '<button class="bk-3rd-chip" id="oddsChip">📈 Champion odds</button>' : ''}
+</h2>
       <div class="bracket">${bkHalf('left',BK_LEFT)}${centre}${bkHalf('right',BK_RIGHT)}</div>`;
     drawConnectors();
   }
@@ -1736,6 +1744,46 @@
   }
   function buildTravel() { renderTravelBoard(); drawTravelPaths(); }
 
+  // Compare data lives in the H2H card (see cmpVal / compareBlock below).
+
+  // ---- Compare stats, folded into the H2H card (rank / form / wages / travel) ----
+  function groupRow(id) {
+    for (const [, rows] of groupsOrdered) for (const r of rows) if (String(r.id) === String(id)) return r;
+    return null;
+  }
+  function cmpVal(rec) {
+    const fmtM = n => n >= 1e9 ? '€' + (n / 1e9).toFixed(2) + 'bn' : '€' + Math.round(n / 1e6) + 'm';
+    const grp = groupRow(rec.id);
+    const sc = (scorersByTeam.get(String(rec.id)) || [])[0];
+    const sal = salariesData && salariesData.teams && salariesData.teams[rec.fifa];
+    const tv = travelStats(rec.fifa);
+    const od = oddsByTeam && oddsByTeam.get(rec.fifa);
+    return {
+      rank: rankOf(rec.fifa) ? `#${rankOf(rec.fifa)} · ${(ptsOf(rec.fifa) || 0).toLocaleString('en-GB')} pts` : '—',
+      group: grp ? `${grp.group || ''} · W${grp.w} D${grp.d} L${grp.l} · ${grp.gf}–${grp.ga}` : '—',
+      form: teamForm(rec.id).slice(-6).join(' ') || '—',
+      scorer: sc ? `${sc.name} · ${sc.goals}` : '—',
+      wages: sal && sal.total ? `${fmtM(sal.total)} (${sal.priced}/26)` : '—',
+      travel: tv.stops ? `${Math.round(tv.km).toLocaleString('en-GB')} km · ${tv.moves} moves` : '—',
+      odds: od ? (od.champ >= 0.995 ? '100%' : od.champ < 0.005 ? '<1%' : Math.round(od.champ * 100) + '%') : '—',
+    };
+  }
+  // Side-by-side stat table shown inside the H2H card for its two teams.
+  function compareBlock(a, b) {
+    const va = cmpVal(a), vb = cmpVal(b);
+    const row = (lab, x, y) => `<div class="cmp-row"><span class="lab">${lab}</span><span>${x}</span><span>${y}</span></div>`;
+    return `<div class="cmp-head"><span class="lab">Compare</span>` +
+        `<span><img src="${a.flag}" alt="">${a.fifa}</span><span><img src="${b.flag}" alt="">${b.fifa}</span></div>` +
+      row('FIFA ranking', va.rank, vb.rank) +
+      row('Group stage', va.group, vb.group) +
+      row('Form (last 6)', va.form, vb.form) +
+      row('Top scorer', va.scorer, vb.scorer) +
+      row('Squad wages', va.wages, vb.wages) +
+      row('Travel', va.travel, vb.travel) +
+      (SHOW_ODDS ? row('Title odds', va.odds, vb.odds) : '') +
+      `<div class="tp-foot">Wages estimated · Capology · MLSPA · FootyStats.</div>`;
+  }
+
   function setView(v) {
     document.querySelectorAll('#viewSeg button').forEach(x => x.classList.toggle('on', x.dataset.view===v));
     document.body.classList.toggle('view-bracket', v==='bracket');
@@ -1885,8 +1933,15 @@
        <div class="h2h-teams"><img src="${a.flag}" alt=""><span>${a.name}${rankChip(a.fifa)}</span>
          <span class="vs">vs</span><span>${b.name}${rankChip(b.fifa)}</span><img src="${b.flag}" alt=""></div>
        ${fact ? `<div class="h2h-fact">${fact}</div>` : ''}
-       <div class="h2h-live"><div class="h2h-loading">Loading FIFA record…</div></div>`;
+       <div class="h2h-live"><div class="h2h-loading">Loading FIFA record…</div></div>
+       <div class="h2h-compare">${compareBlock(a, b)}</div>`;
     el.classList.add('open');
+
+    computeOdds();                                       // populate title odds for the compare rows
+    loadSalaries().then(() => {                          // wages arrive async → refresh the compare block
+      const cmp = el.querySelector('.h2h-compare');
+      if (cmp && el.classList.contains('open')) cmp.innerHTML = compareBlock(a, b);
+    });
 
     const reqId = ++h2hReqId;
     const data = await loadH2H();
