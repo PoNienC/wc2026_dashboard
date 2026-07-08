@@ -1707,7 +1707,7 @@
     const startSid = drawn[0].leg.aSid, shown = new Set();
     addStopBadge(startSid, bySid.get(startSid), col, txt); shown.add(startSid);
     const anim = { cancelled: false, finished: false }; journeyAnim = anim;
-    const total = path.length - 1, DUR = (300 + drawn.length * 620) * 4 / 3;   // pace scales with legs; 75% speed
+    const total = path.length - 1, DUR = (300 + drawn.length * 620) * 8 / 3;   // pace scales with legs; half the previous speed
     let start = null, nextStop = 0;
     const complete = () => {                                // idempotent: draw the whole route + every badge
       if (anim.finished) return;
