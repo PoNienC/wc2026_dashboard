@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WC2026 — Final four air miles</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+  :root{ --ink:#0b1220; --cream:#f8fafc; --muted:#9aa7b8; }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{width:1600px;height:970px;background:var(--ink);
+    font-family:'Segoe UI',system-ui,-apple-system,Roboto,Arial,sans-serif;color:var(--cream);
+    -webkit-font-smoothing:antialiased;overflow:hidden}
+  .poster{width:1600px;height:970px;position:relative;overflow:hidden}
+  #map{position:absolute;inset:0;z-index:0}
+  .leaflet-container{background:#dfe3e8;font-family:inherit}
+  .citydot{background:#0f172a;border:2px solid #fff;border-radius:50%}
+  .clab{font-size:15px;font-weight:800;color:#0f172a;text-shadow:0 0 4px #fff,0 0 4px #fff,0 0 4px #fff,0 0 4px #fff;white-space:nowrap}
+  .clab.l{text-align:right}
+  .startflag img{width:22px;height:16px;border-radius:2px;box-shadow:0 0 0 2px #fff,0 1px 4px rgba(0,0,0,.4)}
+
+  /* ---- overlaid text ---- */
+  .topveil{position:absolute;left:0;right:0;top:0;height:360px;pointer-events:none;z-index:400;
+    background:linear-gradient(180deg,rgba(8,12,22,.92),rgba(8,12,22,.6) 45%,rgba(8,12,22,0))}
+  .title{position:absolute;left:48px;top:36px;max-width:1120px;z-index:401}
+  .title h1{font-size:64px;line-height:1.02;font-weight:900;letter-spacing:-.018em;text-shadow:0 3px 16px rgba(0,0,0,.6)}
+  .title h1 .em{color:#fdba74}
+  .title .kick{margin-top:20px;font-size:31px;font-weight:800;line-height:1.26;max-width:940px;text-shadow:0 2px 13px rgba(0,0,0,.7)}
+  .title .kick .hi{color:#fdba74}
+
+  .botveil{position:absolute;left:0;right:0;bottom:0;height:225px;z-index:400;pointer-events:none;
+    background:linear-gradient(0deg,rgba(8,12,22,.95),rgba(8,12,22,.8) 46%,rgba(8,12,22,0))}
+  .rankbar{position:absolute;left:46px;right:46px;bottom:28px;z-index:401;
+    display:grid;grid-template-columns:repeat(4,1fr);gap:30px}
+  .rb .top{display:flex;align-items:center;gap:11px;margin-bottom:9px}
+  .rb .rk{font-size:23px;font-weight:900;color:var(--muted)}
+  .rb .top img{width:40px;height:30px;border-radius:3px;object-fit:cover;box-shadow:0 1px 3px rgba(0,0,0,.5)}
+  .rb .nm{font-size:27px;font-weight:800}
+  .rb .barwrap{position:relative;height:33px;background:rgba(148,163,184,.2);border-radius:7px}
+  .rb .bar{position:absolute;left:0;top:0;height:33px;border-radius:7px}
+  .rb .km{position:absolute;right:11px;top:0;height:33px;display:flex;align-items:center;font-size:22px;font-weight:900}
+</style>
+</head>
+<body>
+<div class="poster">
+  <div id="map"></div>
+  <div class="topveil"></div>
+  <div class="title">
+    <h1>The final four have flown<br><span class="em">29,000 km</span> to reach the semis</h1>
+    <div class="kick">Spain has flown <span class="hi">almost 3× further than France</span> to reach the <i>same</i> semi-final.</div>
+  </div>
+  <div class="botveil"></div>
+  <div class="rankbar" id="rank"></div>
+</div>
+
+<script>
+const STAD = {
+  LAX:{n:'Los Angeles',lat:33.9535,lng:-118.3392}, SFO:{n:'SF Bay Area',lat:37.4033,lng:-121.9694},
+  SEA:{n:'Seattle',lat:47.5952,lng:-122.3316},     VAN:{n:'Vancouver',lat:49.2768,lng:-123.1120},
+  HOU:{n:'Houston',lat:29.6847,lng:-95.4107},      DAL:{n:'Dallas',lat:32.7473,lng:-97.0945},
+  KC:{n:'Kansas City',lat:39.0489,lng:-94.4839},   ATL:{n:'Atlanta',lat:33.7554,lng:-84.4008},
+  MIA:{n:'Miami',lat:25.9580,lng:-80.2389},        BOS:{n:'Boston',lat:42.0909,lng:-71.2643},
+  PHI:{n:'Philadelphia',lat:39.9008,lng:-75.1675}, NY:{n:'New York',lat:40.8135,lng:-74.0745},
+  TOR:{n:'Toronto',lat:43.6332,lng:-79.4186},      MTY:{n:'Monterrey',lat:25.6693,lng:-100.2442},
+  MEX:{n:'Mexico City',lat:19.3029,lng:-99.1505},  GDL:{n:'Guadalajara',lat:20.6817,lng:-103.4625},
+};
+const TEAMS = [   // hex = national flag colour; kmDark = dark km label (light-coloured bar)
+  {code:'ESP',name:'Spain',    flag:'es',    hex:'#FBBF00',km:10374,stops:['ATL','ATL','GDL','LAX','DAL','LAX','DAL'],kmDark:true},
+  {code:'ENG',name:'England',  flag:'gb-eng',hex:'#CE1124',km:9171, stops:['DAL','BOS','NY','ATL','MEX','MIA','ATL']},
+  {code:'ARG',name:'Argentina',flag:'ar',    hex:'#75AADB',km:5644, stops:['KC','DAL','DAL','MIA','ATL','KC','ATL']},
+  {code:'FRA',name:'France',   flag:'fr',    hex:'#002C9C',km:3859, stops:['NY','PHI','BOS','NY','PHI','BOS','DAL']},
+];
+const flagURL = f => `https://flagcdn.com/48x36/${f}.png`;
+
+const havKm=(a,b)=>{const r=Math.PI/180,R=6371;const s=Math.sin((b.lat-a.lat)*r/2)**2+Math.cos(a.lat*r)*Math.cos(b.lat*r)*Math.sin((b.lng-a.lng)*r/2)**2;return 2*R*Math.asin(Math.sqrt(s));};
+function gcArc(a,b,n=32){const r=Math.PI/180,d=havKm(a,b)/6371;if(d<1e-4)return[[a.lat,a.lng],[b.lat,b.lng]];const la1=a.lat*r,lo1=a.lng*r,la2=b.lat*r,lo2=b.lng*r,pts=[];for(let i=0;i<=n;i++){const f=i/n,A=Math.sin((1-f)*d)/Math.sin(d),B=Math.sin(f*d)/Math.sin(d);const x=A*Math.cos(la1)*Math.cos(lo1)+B*Math.cos(la2)*Math.cos(lo2);const y=A*Math.cos(la1)*Math.sin(lo1)+B*Math.cos(la2)*Math.sin(lo2);const z=A*Math.sin(la1)+B*Math.sin(la2);pts.push([Math.atan2(z,Math.hypot(x,y))/r,Math.atan2(y,x)/r]);}return pts;}
+// repeated city pairs bow apart; amplitude has a firm floor so even short legs (and 3+ repeats) separate clearly
+function bowArc(A,B,k,n=32){const base=gcArc(A,B,n);if(!k||base.length<3)return base;
+  // canonical orientation of the pair, so a leg flown A->B and its return B->A bow to OPPOSITE sides (not the same one)
+  const swap=(A.lat!==B.lat)?(A.lat>B.lat):(A.lng>B.lng);const P=swap?B:A,Q=swap?A:B;
+  const c=Math.cos((P.lat+Q.lat)/2*Math.PI/180)||1;const dLat=Q.lat-P.lat,dLng=(Q.lng-P.lng)*c;const len=Math.hypot(dLat,dLng);if(len<0.05)return base;
+  const perLeg=Math.min(3.2,1.35+len*0.12),amp=Math.ceil(k/2)*perLeg*(k%2?1:-1);const pLat=-dLng/len,pLng=(dLat/len)/c;
+  return base.map((p,i)=>{const f=Math.sin(Math.PI*i/n);return[p[0]+pLat*amp*f,p[1]+pLng*amp*f];});}
+
+const map=L.map('map',{zoomControl:false,attributionControl:false,zoomSnap:0.02,
+  dragging:false,scrollWheelZoom:false,doubleClickZoom:false,boxZoom:false,keyboard:false});
+const tiles=L.tileLayer('https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png',
+  {subdomains:'abcd',maxZoom:9,detectRetina:true});
+let tilesDone=false; tiles.on('load',()=>{tilesDone=true;}); tiles.addTo(map);
+
+const usedKeys=new Set(); TEAMS.forEach(t=>t.stops.forEach(k=>usedKeys.add(k)));
+for(const k of usedKeys){const s=STAD[k];const east=s.lng>-92 && k!=='BOS';
+  L.marker([s.lat,s.lng],{icon:L.divIcon({className:'',html:'<div class="citydot" style="width:12px;height:12px"></div>',iconSize:[12,12],iconAnchor:[6,6]})}).addTo(map);
+  L.marker([s.lat,s.lng],{icon:L.divIcon({className:'clab'+(east?' l':''),html:s.n,
+    iconSize:[180,20],iconAnchor:east?[189,10]:[-10,10]})}).addTo(map);
+}
+const seen=new Map();   // GLOBAL: any repeated city pair (same OR different team) bows apart, so no two legs overlap
+[...TEAMS].reverse().forEach(t=>{
+  for(let i=1;i<t.stops.length;i++){
+    const A=STAD[t.stops[i-1]],B=STAD[t.stops[i]];
+    if(havKm(A,B)<1)continue;
+    const key=[t.stops[i-1],t.stops[i]].sort().join('|');
+    const k=seen.get(key)||0; seen.set(key,k+1);
+    const arc=bowArc(A,B,k);
+    const dash=(i===t.stops.length-1)?'5 8':null;   // final leg = the upcoming semi-final trip → dashed
+    L.polyline(arc,{color:'#0f172a',weight:3,opacity:.34,lineCap:'round',dashArray:dash}).addTo(map);
+    L.polyline(arc,{color:t.hex,weight:1.8,opacity:.98,lineCap:'round',dashArray:dash}).addTo(map);
+  }
+});
+// flags sit at each team's SEMI-FINAL venue (their journey's last stop); shared venues fan the pair side by side
+const byDest=new Map();
+TEAMS.forEach(t=>{const d=t.stops[t.stops.length-1];if(!byDest.has(d))byDest.set(d,[]);byDest.get(d).push(t);});
+for(const [sid,list] of byDest){const s=STAD[sid];
+  list.forEach((t,i)=>{const off=(i-(list.length-1)/2)*30;
+    L.marker([s.lat,s.lng],{icon:L.divIcon({className:'startflag',html:`<img src="${flagURL(t.flag)}">`,iconSize:[22,16],iconAnchor:[11-off,26]}),zIndexOffset:1000}).addTo(map);
+  });
+}
+// full-bleed framing with generous margins (routes sit in the middle band, like the dashboard view)
+const FRAME = L.latLngBounds([[13.5,-125],[49.5,-66]]);
+function frameMap(){map.invalidateSize();map.fitBounds(FRAME,{paddingTopLeft:[8,8],paddingBottomRight:[8,8]});}
+frameMap();
+
+const maxKm=Math.max(...TEAMS.map(t=>t.km));
+document.getElementById('rank').innerHTML=TEAMS.map((t,i)=>
+  `<div class="rb"><div class="top"><span class="rk">${i+1}</span><img src="${flagURL(t.flag)}"><span class="nm">${t.name}</span></div>
+     <div class="barwrap"><div class="bar" style="width:${Math.round(t.km/maxKm*100)}%;background:${t.hex}"></div>
+       <div class="km" style="color:${t.kmDark?'#1a1a1a':'#fff'};text-shadow:${t.kmDark?'none':'0 1px 4px rgba(0,0,0,.5)'}">${t.km.toLocaleString('en-GB')} km</div></div></div>`).join('');
+
+map.whenReady(()=>{ setTimeout(()=>{
+  frameMap();
+  let tries=0; (function wait(){ if(tilesDone||tries++>40){ frameMap(); requestAnimationFrame(()=>{window.__ready=true;}); } else setTimeout(wait,150); })();
+},300);});
+</script>
+</body>
+</html>
