@@ -238,6 +238,28 @@
     color:#fff;font-size:12px;font-weight:800;letter-spacing:.02em;font-variant-numeric:tabular-nums;
     padding:2px 8px;border-radius:999px;}
   .leaflet-tooltip.tv-kmcount::before{display:none;}
+  /* Race-to-the-Final: combined-distance headline + trigger button */
+  .tv-headline{padding:12px 14px;border-bottom:1px solid var(--line);
+    background:linear-gradient(180deg,rgba(245,158,11,.10),transparent);}
+  .tv-hl-top{font-size:10.5px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);}
+  .tv-hl-km{font-size:23px;font-weight:800;line-height:1.18;font-variant-numeric:tabular-nums;letter-spacing:-.01em;}
+  .tv-hl-sub{font-size:11.5px;font-weight:600;color:var(--muted);margin-bottom:9px;}
+  .tv-racebtn{display:block;width:100%;cursor:pointer;font:800 13px/1 -apple-system,system-ui,sans-serif;
+    color:#fff;background:var(--selected);border:0;border-radius:9px;padding:9px 12px;letter-spacing:.02em;
+    box-shadow:0 2px 8px rgba(245,158,11,.35);transition:filter .15s,transform .05s;}
+  .tv-racebtn:hover{filter:brightness(1.06);}
+  .tv-racebtn:active{transform:translateY(1px);}
+  .tv-racebtn.on{background:var(--ink);color:var(--panel);box-shadow:none;}
+  .tv-racebtn:focus-visible{outline:2px solid #93c5fd;outline-offset:2px;}
+  /* highlighted semi-final venues where the four roads converge */
+  .tv-semi{background:transparent;pointer-events:none;}
+  .tv-semi .ring{position:absolute;left:0;top:0;width:15px;height:15px;margin:-7.5px 0 0 -7.5px;border-radius:50%;
+    border:2.5px solid var(--selected);box-shadow:0 0 0 2.5px rgba(245,158,11,.22);animation:tvsemi 1.6s ease-out infinite;}
+  .tv-semi .tag{position:absolute;left:0;top:9px;transform:translateX(-50%);white-space:nowrap;
+    font:800 8.5px/1 -apple-system,system-ui,sans-serif;letter-spacing:.05em;text-transform:uppercase;color:var(--selected);
+    text-shadow:0 1px 3px var(--panel),0 -1px 3px var(--panel),1px 0 3px var(--panel),-1px 0 3px var(--panel);}
+  @keyframes tvsemi{0%{transform:scale(.55);opacity:1}100%{transform:scale(1.9);opacity:0}}
+  @media (prefers-reduced-motion:reduce){.tv-semi .ring{animation:none;opacity:.9;}}
   .tv-div{display:flex;align-items:center;gap:8px;color:var(--muted);font-size:10px;font-weight:800;
     letter-spacing:1.4px;text-transform:uppercase;padding:10px 12px 4px;}
   .tv-div::before,.tv-div::after{content:"";flex:1;border-top:1px solid var(--line);}
@@ -411,6 +433,20 @@
   .mteam.win .mc,.mteam.win .ms{color:var(--confirmed);}
   .bk-final-box .mbox{border-color:var(--selected);box-shadow:0 6px 18px rgba(245,158,11,.20);}
   .bk-final-box .mdate{background:#fff7ec;color:#b45309;font-weight:700;}
+  /* Bracket replay — round-by-round reveal + controls */
+  .bk-replay{border-color:var(--selected);color:var(--selected);font-weight:700;}
+  .bk-replay:hover{background:var(--selected);color:#fff;}
+  .bk-play-cap{color:var(--selected);font-weight:700;font-size:12.5px;margin-left:2px;white-space:nowrap;}
+  .bk-play-next{border-color:var(--selected);color:var(--selected);font-weight:700;}
+  .bk-play-next:hover{background:var(--selected);color:#fff;}
+  @keyframes bkRes{0%{opacity:0;transform:scale(.35)}60%{transform:scale(1.18)}100%{opacity:1;transform:none}}
+  @keyframes bkAdv{0%{opacity:0;transform:translateY(-8px) scale(.92);background:rgba(245,158,11,.35);box-shadow:inset 0 0 0 2px var(--selected);}
+                   100%{opacity:1;transform:none;background:rgba(245,158,11,0);box-shadow:inset 0 0 0 0 rgba(245,158,11,0);}}
+  @keyframes bkSeed{from{opacity:0;transform:translateY(-3px)}to{opacity:1;transform:none}}
+  .mteam .ms.bk-res{animation:bkRes .5s ease-out both;transform-origin:right center;}
+  .mteam.bk-adv{animation:bkAdv .6s ease-out both;}
+  .mteam.bk-seed{animation:bkSeed .45s ease-out both;}
+  @media (prefers-reduced-motion:reduce){.mteam .ms.bk-res,.mteam.bk-adv,.mteam.bk-seed{animation:none;}}
   .bk-third{margin-top:18px;}
   .bk-third .lab{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);text-align:center;padding-bottom:6px;}
 
@@ -1295,18 +1331,21 @@
         .formatToParts(new Date()).find(p => p.type === 'timeZoneName') || {}).value || '';
     } catch (e) { return ''; }
   }
-  function bkSlot(teamId, feeder, score, pen, isWin, finished, odds) {
+  function bkSlot(teamId, feeder, score, pen, isWin, finished, odds, anim) {
+    const slotCls = (anim === 'bk-adv' || anim === 'bk-seed') ? ' ' + anim : '';   // team advances / seeds in
+    const scoreCls = (anim === 'bk-res') ? ' bk-res' : '';                          // score pops in
     const t = teamsById.get(String(teamId));
     if (t) {
       const sc = finished ? (pen != null ? `${score} <span class="pens">(${pen})</span>` : `${score}`)
                : (odds != null ? `<span class="win-odds" title="Model pre-match win probability — FIFA ranking points, Elo-style">${Math.round(odds * 100)}%</span>` : '');
-      return `<div class="mteam pick ${isWin?'win':''}" data-team="${t.id}" title="${t.name}">
-        <img src="${t.flag}" alt=""><span class="mc">${t.fifa}</span><span class="ms">${sc}</span></div>`;
+      return `<div class="mteam pick ${isWin?'win':''}${slotCls}" data-team="${t.id}" title="${t.name}">
+        <img src="${t.flag}" alt=""><span class="mc">${t.fifa}</span><span class="ms${scoreCls}">${sc}</span></div>`;
     }
     return `<div class="mteam tbd"><span class="mlabel">${feeder}</span><span class="ms"></span></div>`;
   }
   // Which knockout match is live now / up next → highlighted (light-yellow frame; live gets a rolling ball).
   let bkLive = new Set(), bkNext = null;
+  let bkPlay = null;   // Replay mode: {round, playing, timer} while the "road so far" reveal is running (null = live view)
   function computeBracketStatus() {
     bkLive = new Set(); bkNext = null;
     const now = Date.now(); let nextT = Infinity;
@@ -1321,20 +1360,41 @@
 
   function matchBox(id) {
     const g = gamesById.get(String(id)); const [fh,fa] = FEEDERS[id] || ['',''];
-    const fin = g ? g.finished : false; const hs = g?g.hs:'', as = g?g.as:'';
+    // Replay gating: a match shows its teams once its feeder round has played (pbSeed),
+    // its score once its own round is reached (pbResult). anim = the reveal happening THIS step.
+    let pbHomeSeed = true, pbAwaySeed = true, pbResult = true, animH = '', animA = '', animScore = '';
+    if (bkPlay) {
+      const n = +id, isR32 = n >= 73 && n <= 88;
+      const feeds = BK_FEEDS[id] || (n === 103 ? [101, 102] : []);   // where this match's two teams come from
+      pbHomeSeed = isR32 || bkPlay.revealed.has(feeds[0]);           // a slot fills once its feeder result is revealed
+      pbAwaySeed = isR32 || bkPlay.revealed.has(feeds[1]);
+      pbResult = bkPlay.revealed.has(n);
+      const cur = bkPlay.current;
+      if (cur == null) { if (isR32) { animH = 'bk-seed'; animA = 'bk-seed'; } }   // opening: R32 line-ups fade in
+      else {
+        if (n === cur) animScore = 'bk-res';                         // this match's score pops in
+        const into = BK_INTO[cur];                                   // its winner advances into the next round
+        if (into && n === into.to) { if (into.slot === 0) animH = 'bk-adv'; else animA = 'bk-adv'; }
+      }
+    }
+    const finData = g ? g.finished : false;
+    const fin = finData && pbResult;                        // scores/winner shown only when the result is revealed
+    const hs = g?g.hs:'', as = g?g.as:'';
     const hp = (g && g.hp != null) ? g.hp : null, ap = (g && g.ap != null) ? g.ap : null;
     const shoot = fin && hp != null && ap != null;          // tie decided on penalties
     const homeWin = fin && (hs > as || (shoot && hp > ap)); // shootout winner advances even on a drawn scoreline
     const awayWin = fin && (as > hs || (shoot && ap > hp));
-    const when = (g && koLabel(g.ko)) || (g ? dateLabel(g.date) : '') || ('M' + id);
-    const venue = g && g.venue ? g.venue : '';
-    const both = g && teamsById.has(String(g.homeId)) && teamsById.has(String(g.awayId));  // both teams placed → head-to-head
-    const live = bkLive.has(String(id)), next = !live && bkNext === String(id);
-    const po = (!fin && !live && both) ? matchOdds(g) : null;   // pre-match model odds fill the empty score slot
+    const homeId = pbHomeSeed ? (g&&g.homeId) : null, awayId = pbAwaySeed ? (g&&g.awayId) : null;
+    const bothSeed = pbHomeSeed && pbAwaySeed;
+    const when = (bkPlay && !bothSeed) ? '' : ((g && koLabel(g.ko)) || (g ? dateLabel(g.date) : '') || ('M' + id));
+    const venue = (!bkPlay && g && g.venue) ? g.venue : '';
+    const both = !bkPlay && g && teamsById.has(String(g.homeId)) && teamsById.has(String(g.awayId));  // both teams placed → head-to-head
+    const live = !bkPlay && bkLive.has(String(id)), next = !bkPlay && !live && bkNext === String(id);
+    const po = (!bkPlay && !fin && !live && both) ? matchOdds(g) : null;   // pre-match model odds fill the empty score slot
     return `<div class="mbox ${fin?'fin':''}${live?' live':''}${next?' next':''}" data-mid="${id}">
       <div class="mdate${both?' has-h2h':''}"${both?` data-h2h="${id}"`:''}>${both?'<span class="h2h-hint">⚔ H2H</span>':''}${live?'<span class="mlive">● LIVE</span>':''}${next?'<span class="mnext">NEXT</span>':''}${when}${shoot?' · pens':''}${venue?`<span class="mvenue">📍 ${venue}</span>`:''}</div>
-      ${bkSlot(g&&g.homeId, fh, hs, shoot?hp:null, homeWin, fin || live, po)}
-      ${bkSlot(g&&g.awayId, fa, as, shoot?ap:null, awayWin, fin || live, po == null ? null : 1 - po)}${live?'<span class="mball" aria-hidden="true">⚽</span>':''}</div>`;
+      ${bkSlot(homeId, fh, hs, shoot?hp:null, homeWin, fin || live, po, animH || animScore)}
+      ${bkSlot(awayId, fa, as, shoot?ap:null, awayWin, fin || live, po == null ? null : 1 - po, animA || animScore)}${live?'<span class="mball" aria-hidden="true">⚽</span>':''}</div>`;
   }
   const bkCol = (round, ids) => `<div class="bk-col"><div class="bk-h">${ROUND_H[round]}</div>
     <div class="bk-matches">${ids.map(matchBox).join('')}</div></div>`;
@@ -1346,13 +1406,17 @@
       <div class="bk-final-box">${matchBox(BK_FINAL)}</div>
       <div class="bk-third"><div class="lab">Match for third place</div>${matchBox(BK_THIRD)}</div></div>`;
     const tz = viewerTz();
+    const head = bkPlay
+      ? `<span class="bk-sub bk-play-cap">▶ ${playbackCaption()}</span>
+         <button class="bk-3rd-chip bk-play-next" id="replayNext">Next ›</button>
+         <button class="bk-3rd-chip" id="replaySkip">Skip to now</button>`
+      : `<span class="bk-sub">· bold = winner · click a team for its details · click ⚔ H2H · kick-offs in your local time${tz?` (${tz})`:''}</span>
+         <button class="bk-3rd-chip bk-replay" id="replayChip">▶ Replay the road so far</button>
+         <button class="bk-3rd-chip" id="thirdChip">🥉 3rd-place race</button>
+         ${SHOW_ODDS ? '<button class="bk-3rd-chip" id="oddsChip">📈 Champion odds</button>' : ''}`;
     document.getElementById('bracket-view').innerHTML =
-      `<h2 class="bk-title">Knockout bracket
-        <span class="bk-sub">· bold = winner · click a team for its details · click ⚔ H2H · kick-offs in your local time${tz?` (${tz})`:''}</span>
-        <button class="bk-3rd-chip" id="thirdChip">🥉 3rd-place race</button>
-        ${SHOW_ODDS ? '<button class="bk-3rd-chip" id="oddsChip">📈 Champion odds</button>' : ''}
-</h2>
-      <div class="bracket">${bkHalf('left',BK_LEFT)}${centre}${bkHalf('right',BK_RIGHT)}</div>`;
+      `<h2 class="bk-title">Knockout bracket ${head}</h2>
+      <div class="bracket ${bkPlay?'bk-playing':''}">${bkHalf('left',BK_LEFT)}${centre}${bkHalf('right',BK_RIGHT)}</div>`;
     drawConnectors();
   }
 
@@ -1382,6 +1446,67 @@
       }
     }
     wrap.insertBefore(svg, wrap.firstChild);
+  }
+
+  // ---- Bracket replay: "the road so far" reveals ONE MATCH at a time, in the order played ----
+  function bkRoundOrd(id) { id = +id;                         // knockout round ordinal (group / other → 0)
+    if (id >= 73 && id <= 88) return 1;                       // Round of 32
+    if (id >= 89 && id <= 96) return 2;                       // Round of 16
+    if (id >= 97 && id <= 100) return 3;                      // Quarter-final
+    if (id === 101 || id === 102) return 4;                   // Semi-final
+    if (id === 103 || id === 104) return 5;                   // Final / 3rd place
+    return 0;
+  }
+  const BK_ROUND_NAME = { 1:'Round of 32', 2:'Round of 16', 3:'Quarter-finals', 4:'Semi-finals', 5:'Final' };
+  // Winner of match M advances into receiver .to's slot .slot (0 = home, 1 = away).
+  const BK_INTO = (() => { const m = {}; for (const r in BK_FEEDS) { const [f0, f1] = BK_FEEDS[r];
+    m[f0] = { to: +r, slot: 0 }; m[f1] = { to: +r, slot: 1 }; } return m; })();
+  function bkReplayOrder() {                                  // finished knockout matches, in the order they kicked off
+    const ids = [];
+    for (const [id, g] of gamesById) { const n = +id;
+      if (n >= 73 && n <= 104 && g && g.finished) ids.push(n); }
+    const t = n => { const g = gamesById.get(String(n));
+      return g && g.ko ? new Date(g.ko).getTime() : (g && g.date ? new Date(g.date).getTime() : n); };
+    return ids.sort((a, b) => t(a) - t(b) || a - b);
+  }
+  function playbackCaption() {
+    if (!bkPlay || bkPlay.current == null) return 'The draw — line-ups set, no ball kicked';
+    const g = gamesById.get(String(bkPlay.current)), rd = BK_ROUND_NAME[bkRoundOrd(bkPlay.current)] || '';
+    const h = g && teamsById.get(String(g.homeId)), a = g && teamsById.get(String(g.awayId));
+    const prog = `${bkPlay.i}/${bkPlay.order.length}`;
+    if (g && h && a) { const shoot = g.hp != null && g.ap != null;
+      const sc = `${g.hs}–${g.as}${shoot ? ` (${g.hp}–${g.ap} pens)` : ''}`;
+      return `${prog} · ${rd} · ${h.fifa} ${sc} ${a.fifa}`; }
+    return `${prog} · ${rd}`;
+  }
+  const BK_PACE = { 1: 480, 2: 700, 3: 1000, 4: 1400, 5: 1900 };   // per-match pace: R32 zips, late ties linger
+  const BK_OPEN_MS = 1200, BK_END_MS = 1700;
+  function startBracketReplay() {
+    const order = bkReplayOrder();
+    if (!order.length) return;                               // nothing played yet
+    if (bkPlay) clearTimeout(bkPlay.timer);
+    bkPlay = { order, i: 0, revealed: new Set(), current: null, playing: true, timer: null };
+    buildBracket();                                          // the blank draw: R32 line-ups, no ball kicked
+    bkPlay.timer = setTimeout(bracketReplayStep, BK_OPEN_MS);
+  }
+  function bracketReplayStep() {
+    if (!bkPlay) return;
+    if (bkPlay.i >= bkPlay.order.length) { endBracketReplay(); return; }
+    const mid = bkPlay.order[bkPlay.i];
+    bkPlay.revealed.add(mid); bkPlay.current = mid; bkPlay.i++;
+    buildBracket();                                          // reveal this one match's result + advance its winner
+    if (bkPlay.i >= bkPlay.order.length) { bkPlay.playing = false; bkPlay.timer = setTimeout(endBracketReplay, BK_END_MS); }
+    else if (bkPlay.playing) { const nxt = bkPlay.order[bkPlay.i];
+      bkPlay.timer = setTimeout(bracketReplayStep, BK_PACE[bkRoundOrd(nxt)] || 800); }
+  }
+  function replayNext() {                                    // "Next ›": reveal the next match now, keep playing
+    if (!bkPlay) return;
+    clearTimeout(bkPlay.timer); bkPlay.playing = true;
+    bracketReplayStep();
+  }
+  function endBracketReplay() {                              // settle onto the real live view (with live/next highlight)
+    if (bkPlay) { clearTimeout(bkPlay.timer); bkPlay = null; }
+    if (document.body.classList.contains('view-bracket')) buildBracket();
   }
 
   // ===================================================================
@@ -1575,6 +1700,7 @@
             [Math.max(...ss.map(s => s.lat)) + 1.5, Math.max(...ss.map(s => s.lng)) + 2]];
   })();
   let travelLayer = null, travelSel = null, animateJourneyNext = false, journeyAnim = null;
+  let raceMode = false, animateRaceNext = false, raceAnim = null;   // "Race to the Final": all survivors at once
   const travelPad = () => window.matchMedia('(max-width:640px)').matches
     ? { paddingTopLeft: [10, 10], paddingBottomRight: [10, Math.round(map.getSize().y * 0.45)] }
     : { paddingTopLeft: [Math.min(380, Math.round(map.getSize().x * 0.4)), 10], paddingBottomRight: [24, 24] };
@@ -1647,7 +1773,8 @@
     return out;
   }
   // ---- selected-team journey: static, or animated (flag flies point-to-point) ----
-  function cancelJourneyAnim() { if (journeyAnim) journeyAnim.cancelled = true; journeyAnim = null; }
+  function cancelJourneyAnim() { if (journeyAnim) journeyAnim.cancelled = true; journeyAnim = null;
+                                 if (raceAnim) raceAnim.cancelled = true; raceAnim = null; }
   function addStopBadge(sid, nums, col, txt) {
     const s = STADIUMS[sid], label = (nums || []).join('·');
     travelLayer.addLayer(L.marker([s.lat, s.lng],
@@ -1738,6 +1865,132 @@
     setTimeout(() => { if (!anim.cancelled) complete(); }, DUR + 600);
   }
 
+  // ---- Race to the Final: every surviving team's full journey animating at once ----
+  // Each flag flies at a constant real speed, so the longest road (Spain) is still in the
+  // air after the shortest (France) has already landed — that gap is the whole story.
+  function raceSurvivors() {
+    const elim = eliminatedSet();
+    return [...journeysByFifa.keys()]
+      .filter(fc => !elim.has(fc) && teamsByFifa.get(fc))
+      .map(fc => ({ fc, km: travelStats(fc).km }))
+      .sort((a, b) => b.km - a.km)          // longest journey first → lands last
+      .map(s => s.fc);
+  }
+  function buildFlyer(fc) {                  // path points + cumulative km + stop indices for one team
+    const col = natCol(fc), txt = natText(col), bySid = badgesBySid(fc), pairSeen = new Map();
+    const drawn = travelStats(fc).legs.filter(l => l.km >= 1).map(leg => {
+      const key = [leg.aSid, leg.bSid].sort().join('|');
+      const k = pairSeen.get(key) || 0; pairSeen.set(key, k + 1);
+      return { leg, pts: bowArc(leg.A, leg.B, k) };
+    });
+    const path = [], cumKm = [], stopAt = []; let acc = 0;
+    drawn.forEach((d, si) => {
+      const seg = d.pts, n = seg.length - 1;
+      for (let pi = (si > 0 ? 1 : 0); pi < seg.length; pi++) {   // drop the duplicate join point on later legs
+        path.push(seg[pi]); cumKm.push(acc + d.leg.km * (pi / n));   // great-circle km → total matches the board
+      }
+      acc += d.leg.km; stopAt.push({ idx: path.length - 1, sid: d.leg.bSid });
+    });
+    return { fc, col, txt, bySid, drawn, path, cumKm, stopAt, total: acc,
+             rec: teamsByFifa.get(fc), startSid: drawn.length ? drawn[0].leg.aSid : null };
+  }
+  function drawRaceToFinal(animate) {
+    cancelJourneyAnim();
+    const flyers = raceSurvivors().map(buildFlyer).filter(f => f.path.length > 1);
+    if (!flyers.length) return;
+    // fan flags/pills that share a destination (the SF venues) so both stay legible on convergence
+    const endGroups = new Map();
+    flyers.forEach(f => { f.endSid = f.stopAt.length ? f.stopAt[f.stopAt.length - 1].sid : f.startSid;
+      if (!endGroups.has(f.endSid)) endGroups.set(f.endSid, []); endGroups.get(f.endSid).push(f); });
+    endGroups.forEach(list => list.forEach((f, i) => {
+      f.xoff = Math.round((i - (list.length - 1) / 2) * 34);       // px the flag icon leans apart at a shared venue
+      f.pillY = 11 + i * 19;                                       // stack the km pills so they don't cover
+    }));
+    // highlight the two semi-final venues where the roads converge
+    for (const sid of new Set(flyers.map(f => f.endSid))) {
+      const s = STADIUMS[sid]; if (!s) continue;
+      travelLayer.addLayer(L.marker([s.lat, s.lng], { zIndexOffset: 700, interactive: false,
+        icon: L.divIcon({ className: 'tv-semi', iconSize: [0, 0],
+          html: '<span class="ring"></span><span class="tag">Semi-final</span>' }) }));
+    }
+    const flag = f => `<img src="${(f.rec || {}).flag || ''}" alt="">`;
+    const pill = (fc, v) => `${fc} · ${Math.round(v).toLocaleString('en-GB')} km`;
+    const planeIcon = f => L.divIcon({ className: 'tv-planeflag', html: flag(f),
+      iconSize: [26, 19], iconAnchor: [13 - f.xoff, 10] });
+
+    if (!animate) {                                               // resting state: full routes + flags parked
+      flyers.forEach(f => {
+        f.drawn.forEach(d => travelLayer.addLayer(L.polyline(d.pts, { color: f.col, weight: 2.6,
+          opacity: 0.95, dashArray: d.leg.future ? '6 7' : null }).bindTooltip(legTip(d.leg), { sticky: true })));
+        for (const [sid, nums] of f.bySid) addStopBadge(sid, nums, f.col, f.txt);
+        L.marker(f.path[f.path.length - 1], { zIndexOffset: 1200, icon: planeIcon(f) }).addTo(travelLayer)
+          .bindTooltip(pill(f.fc, f.total), { permanent: true, direction: 'bottom', offset: [0, f.pillY], className: 'tv-kmcount' });
+      });
+      return;
+    }
+    // animated: all four move ONE LEG at a time, in lockstep. Every hop takes the same time,
+    // so distance shows in the km counter (and arc length), not in who finishes first. A per-leg
+    // setTimeout advances the hop even when rAF is throttled (hidden tab); rAF smooths it otherwise.
+    const anim = { cancelled: false, finished: false }; raceAnim = anim;
+    const LEG_MS = 720, PAUSE_MS = 340;
+    const maxLegs = Math.max(...flyers.map(f => f.drawn.length));
+    flyers.forEach(f => {
+      const o = f.drawn[0].pts[0];
+      f.line = L.polyline([o], { color: f.col, weight: 2.9, opacity: 0.97 }).addTo(travelLayer);
+      f.plane = L.marker(o, { zIndexOffset: 1200, icon: planeIcon(f) }).addTo(travelLayer);
+      f.plane.bindTooltip(pill(f.fc, 0), { permanent: true, direction: 'bottom', offset: [0, f.pillY], className: 'tv-kmcount' });
+      f.shown = new Set();
+      if (f.startSid) { addStopBadge(f.startSid, f.bySid.get(f.startSid), f.col, f.txt); f.shown.add(f.startSid); }
+      f.baseLine = [o]; f.doneKm = 0;
+    });
+    const land = f => {                                          // full route + parked flag + total (idempotent end state)
+      const full = [];
+      f.drawn.forEach((d, i) => { const seg = d.pts; for (let pi = (i > 0 ? 1 : 0); pi < seg.length; pi++) full.push(seg[pi]); });
+      f.line.setLatLngs(full); f.plane.setLatLng(full[full.length - 1]);
+      f.plane.setTooltipContent(pill(f.fc, f.total));
+      for (const [sid, nums] of f.bySid) if (!f.shown.has(sid)) { addStopBadge(sid, nums, f.col, f.txt); f.shown.add(sid); }
+    };
+    const complete = () => { if (anim.finished) return; anim.finished = true;
+      flyers.forEach(land); if (raceAnim === anim) raceAnim = null; };
+    let k = 0;
+    function runLeg() {                                          // animate leg k for every team that still has one
+      if (anim.cancelled || anim.finished) return;
+      if (k >= maxLegs) { complete(); return; }
+      const active = flyers.filter(f => k < f.drawn.length);
+      if (!active.length) { complete(); return; }
+      let legStart = null, done = false;
+      const finalizeLeg = () => {                               // snap every active flag onto its hop's end, then pause
+        if (done || anim.cancelled || anim.finished) return;
+        done = true;
+        for (const f of active) {
+          const seg = f.drawn[k].pts;
+          f.baseLine = f.baseLine.concat(seg.slice(1)); f.doneKm += f.drawn[k].leg.km;
+          f.line.setLatLngs(f.baseLine); f.plane.setLatLng(seg[seg.length - 1]);
+          f.plane.setTooltipContent(pill(f.fc, f.doneKm));
+          const sid = f.drawn[k].leg.bSid;
+          if (!f.shown.has(sid)) { addStopBadge(sid, f.bySid.get(sid), f.col, f.txt); f.shown.add(sid); }
+        }
+        k++;
+        setTimeout(runLeg, PAUSE_MS);                           // brief pause, then the next synchronized hop
+      };
+      requestAnimationFrame(function legFrame(now) {            // smooth flight (foreground)
+        if (anim.cancelled || anim.finished || done) return;
+        if (legStart === null) legStart = now;
+        const p = Math.min(1, (now - legStart) / LEG_MS);
+        for (const f of active) {
+          const seg = f.drawn[k].pts, last = seg.length - 1, idx = Math.max(0, Math.round(p * last));
+          f.line.setLatLngs(f.baseLine.concat(seg.slice(1, idx + 1)));
+          f.plane.setLatLng(seg[idx]);
+          f.plane.setTooltipContent(pill(f.fc, f.doneKm + f.drawn[k].leg.km * (idx / last)));
+        }
+        if (p < 1) requestAnimationFrame(legFrame); else finalizeLeg();
+      });
+      setTimeout(finalizeLeg, LEG_MS + 60);                     // fallback: advance the hop even if rAF is paused
+    }
+    runLeg();
+    setTimeout(() => { if (!anim.cancelled) complete(); }, maxLegs * (LEG_MS + PAUSE_MS) + 1200);  // backstop
+  }
+
   function drawTravelPaths() {
     if (!map) return;
     cancelJourneyAnim();
@@ -1748,7 +2001,10 @@
         { radius: 4, color: '#333', weight: 1.5, fillColor: '#fff', fillOpacity: 1 })
         .bindTooltip(s.n, { permanent: true, direction: 'right', offset: [7, 0], className: 'tv-city' }));
     const elim = eliminatedSet();
-    if (travelSel) {                                       // one team isolated: its full journey
+    if (raceMode) {                                        // Race to the Final: every survivor at once
+      drawRaceToFinal(animateRaceNext);
+      animateRaceNext = false;
+    } else if (travelSel) {                                // one team isolated: its full journey
       drawSelectedJourney(travelSel, animateJourneyNext);
       animateJourneyNext = false;
     } else {                                               // default: each surviving team's NEXT trip only
@@ -1793,6 +2049,8 @@
   function renderTravelBoard() {
     const elim = eliminatedSet();
     const fmt = n => Math.round(n).toLocaleString('en-GB');
+    const combinedKm = [...journeysByFifa.keys()].reduce((s, fc) => s + travelStats(fc).km, 0);
+    const laps = combinedKm / 40075;                       // Earth's equatorial circumference, km
     const all = [...journeysByFifa.keys()]
       .map(fc => ({ fc, rec: teamsByFifa.get(fc), st: travelStats(fc) }))
       .filter(r => r.rec)
@@ -1800,8 +2058,14 @@
     const rank = new Map(all.map((r, i) => [r.fc, i + 1]));   // overall km rank, kept across the grouping
     const rows = [...all.filter(r => !elim.has(r.fc)), ...all.filter(r => elim.has(r.fc))];
     document.getElementById('travel-board').innerHTML =
-      `<div class="sp-title">✈️ Travel tracker</div>
-       <div class="sp-sub">Map shows each surviving team's next trip (flag = destination) · click a team for its full journey · ranked by total great-circle km</div>` +
+      `<div class="tv-headline">
+         <div class="tv-hl-top">All 48 teams combined</div>
+         <div class="tv-hl-km">${fmt(combinedKm)} km</div>
+         <div class="tv-hl-sub">≈ ${laps.toFixed(1)} laps of the Earth 🌍</div>
+         <button class="tv-racebtn${raceMode ? ' on' : ''}" id="tvRaceBtn" type="button">${raceMode ? '✕ Exit race view' : '🏁 Race to the Final'}</button>
+       </div>
+       <div class="sp-title">✈️ Travel tracker</div>
+       <div class="sp-sub">${raceMode ? 'Four roads to the final — every surviving team flies at once, fastest real speed. Longest journey lands last.' : "Map shows each surviving team's next trip (flag = destination) · click a team for its full journey · ranked by total great-circle km"}</div>` +
       rows.map((r) => {
         const i = rank.get(r.fc) - 1;
         const divider = elim.has(r.fc) && (rows.indexOf(r) === 0 || !elim.has(rows[rows.indexOf(r) - 1]?.fc))
@@ -1883,7 +2147,8 @@
     document.body.classList.toggle('view-travel', v==='travel');
     document.getElementById('colourSeg').style.display = v==='map' ? '' : 'none';
     closeH2H(); closeThird(); closeOdds();
-    if (v!=='travel' && travelLayer) { cancelJourneyAnim(); travelLayer.remove(); travelLayer = null; }
+    if (v!=='travel' && travelLayer) { cancelJourneyAnim(); travelLayer.remove(); travelLayer = null; raceMode = false; }
+    if (v!=='bracket' && bkPlay) { clearTimeout(bkPlay.timer); bkPlay = null; }   // leaving the bracket cancels a running replay
     if (v==='bracket') {
       buildBracket();
       if (map) { map.invalidateSize(); map.setView([20,0], 2, { animate:false }); }
@@ -2128,7 +2393,7 @@
     renderSidebar();
     loadRankings().then(() => {            // ranking loads async (CORS-open) — repaint badges when ready
       computeOdds();
-      if (document.body.classList.contains('view-bracket')) buildBracket();
+      if (document.body.classList.contains('view-bracket') && !bkPlay) buildBracket();
       renderSidebar();
       if (selectedId) { const row = document.querySelector(`#groups .team[data-id="${selectedId}"]`); if (row) row.classList.add('active'); }
       if (selectedId && teamsById.has(selectedId) && document.getElementById('detail').classList.contains('open'))
@@ -2148,7 +2413,7 @@
     document.getElementById('refreshBtn').addEventListener('click', async () => {
       loadH2H(true);   // re-pull the baked H2H so newly-set ties / results show
       await loadData(); updateBadge(); renderSidebar(); restyleAll();
-      if (document.body.classList.contains('view-bracket')) buildBracket();
+      if (document.body.classList.contains('view-bracket') && !bkPlay) buildBracket();
       if (selectedId && teamsById.has(selectedId)) selectTeam(selectedId);
     });
     document.getElementById('colourSeg').addEventListener('click', e => {
@@ -2161,6 +2426,9 @@
       const b = e.target.closest('button'); if (!b) return; setView(b.dataset.view);
     });
     document.getElementById('bracket-view').addEventListener('click', e => {
+      if (e.target.closest('#replayChip')) { startBracketReplay(); return; }
+      if (e.target.closest('#replayNext')) { replayNext(); return; }
+      if (e.target.closest('#replaySkip')) { endBracketReplay(); return; }
       if (e.target.closest('#thirdChip')) { openThird(); return; }
       if (e.target.closest('#oddsChip')) { openOdds(); return; }
       const md = e.target.closest('.mdate.has-h2h');
@@ -2178,12 +2446,22 @@
     board.addEventListener('keydown', e => { const el = e.target.closest('.lb-row'); if (el && (e.key==='Enter'||e.key===' ')) { e.preventDefault(); selectScorerNation(el.dataset.team); } });
     const tvBoard = document.getElementById('travel-board');
     const tvPick = el => {
+      raceMode = false;                                    // picking a single team leaves race mode
       travelSel = (travelSel === el.dataset.fifa) ? null : el.dataset.fifa;
       animateJourneyNext = !!travelSel;                    // play the fly-through only on a fresh selection
       buildTravel();
       if (!travelSel && map) map.flyToBounds(TRAVEL_HOME, { ...travelPad(), duration:.6 });
     };
-    tvBoard.addEventListener('click', e => { const el = e.target.closest('.tv-row'); if (el) tvPick(el); });
+    const tvRace = () => {                                 // "Race to the Final" toggle
+      raceMode = !raceMode;
+      if (raceMode) { travelSel = null; animateRaceNext = true; }
+      buildTravel();
+      if (map) map.flyToBounds(TRAVEL_HOME, { ...travelPad(), duration:.6 });
+    };
+    tvBoard.addEventListener('click', e => {
+      if (e.target.closest('#tvRaceBtn')) { tvRace(); return; }
+      const el = e.target.closest('.tv-row'); if (el) tvPick(el);
+    });
     tvBoard.addEventListener('keydown', e => { const el = e.target.closest('.tv-row'); if (el && (e.key==='Enter'||e.key===' ')) { e.preventDefault(); tvPick(el); } });
     window.addEventListener('resize', () => { if (document.body.classList.contains('view-bracket')) drawConnectors(); });
 
@@ -2193,7 +2471,7 @@
       if (selectedId) { const row = document.querySelector(`#groups .team[data-id="${selectedId}"]`); if (row) row.classList.add('active'); }
       if (selectedId && teamsById.has(selectedId) && document.getElementById('detail').classList.contains('open'))
         renderDetail(teamsById.get(selectedId));
-      if (document.body.classList.contains('view-bracket')) buildBracket();
+      if (document.body.classList.contains('view-bracket') && !bkPlay) buildBracket();
       if (document.getElementById('third').classList.contains('open')) renderThirdPlace();
       if (document.body.classList.contains('view-scorers')) {
         buildLeaderboard();
